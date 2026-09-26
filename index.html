@@ -2264,7 +2264,7 @@ function renderToolsGrid(){
     const catStyle=t.category?`background:${catColor(t.category)}22;color:${catColor(t.category)};border-color:${catColor(t.category)}66`:'background:var(--bg4);color:var(--text3);border-color:var(--border)';
       const isWeb=(t.tool_type||'software')==='web';
     return `<div class="tool-card" onclick="openToolModal(${t.id})">
-      ${(t.tags||[]).includes('catalogo-base')?`<div style="margin-bottom:8px;"><span class="tool-badge" style="color:var(--purple);border-color:var(--purple);background:rgba(170,85,255,.12)" title="Herramienta del catálogo base de pentest">★ Base</span></div>`:''}
+      ${(t.tags||[]).includes('catalogo-base')?`<span class="tool-badge" style="position:absolute;top:10px;right:10px;color:var(--purple);border-color:var(--purple);background:rgba(170,85,255,.12)" title="Herramienta del catálogo base de pentest">★ Base</span>`:''}
       <div class="tool-card-hd">
         <div class="tool-icon">${icon}</div>
         <div style="flex:1;min-width:0">
