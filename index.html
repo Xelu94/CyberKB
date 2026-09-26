@@ -2264,6 +2264,7 @@ function renderToolsGrid(){
     const catStyle=t.category?`background:${catColor(t.category)}22;color:${catColor(t.category)};border-color:${catColor(t.category)}66`:'background:var(--bg4);color:var(--text3);border-color:var(--border)';
       const isWeb=(t.tool_type||'software')==='web';
     return `<div class="tool-card" onclick="openToolModal(${t.id})">
+      ${(t.tags||[]).includes('catalogo-base')?`<div style="margin-bottom:8px;"><span class="tool-badge" style="color:var(--purple);border-color:var(--purple);background:rgba(170,85,255,.12)" title="Herramienta del catálogo base de pentest">★ Base</span></div>`:''}
       <div class="tool-card-hd">
         <div class="tool-icon">${icon}</div>
         <div style="flex:1;min-width:0">
@@ -2276,7 +2277,6 @@ function renderToolsGrid(){
         ${isWeb?`<span class="tool-badge" style="color:var(--cyan);border-color:var(--cyan);background:rgba(0,221,255,.1)">🌐 Web</span>`:`<span class="tool-badge" style="color:var(--green);border-color:var(--green);background:rgba(0,255,136,.1)">⚙ SW</span>`}
         ${t.category?`<span class="tool-badge" style="${catStyle}">${catLabel(t.category)}</span>`:''}
         ${t.requires_api?`<span class="tool-badge" style="color:var(--orange);border-color:var(--orange);background:rgba(255,102,0,.1)">API Key</span>`:''}
-        ${(t.tags||[]).includes('catalogo-base')?`<span class="tool-badge" style="color:var(--purple);border-color:var(--purple);background:rgba(170,85,255,.1)" title="Herramienta del catálogo base de pentest">★ Base</span>`:''}
         <span class="tool-mentions">×${t.mention_count} mención${t.mention_count!==1?'es':''}</span>
       </div>
     </div>`;
