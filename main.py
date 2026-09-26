@@ -337,6 +337,7 @@ async def lifespan(app: FastAPI):
     _migrate_db()
     _seed_google_dorks(None)
     _seed_privesc(None)
+    _seed_base_tools(None)
     yield
 
 
@@ -784,37 +785,35 @@ _TOOLS_SEED = [
 ]
 
 
-@app.post("/api/tools/seed")
-def toggle_seed_tools(db: Session = Depends(get_db)):
-    """Toggle del catálogo base de pentest:
-      - si NO está cargado → añade las herramientas del catálogo (etiquetadas
-        con 'catalogo-base' para poder distinguirlas luego).
-      - si YA está cargado → borra solo esas (las que llevan la etiqueta).
-    Las herramientas metidas a mano o detectadas en notas NO se tocan, porque
-    no llevan la etiqueta 'catalogo-base'. Devuelve action='added'|'removed'.
-    """
-    seeded = [t for t in db.query(Tool).all()
-              if "catalogo-base" in json.loads(t.tags or "[]")]
-    if seeded:
-        for t in seeded:
-            db.delete(t)
-        db.commit()
-        return {"action": "removed", "count": len(seeded)}
+def _seed_base_tools(_=None):
+    """Siembra el catálogo base de pentest UNA sola vez (primer arranque).
 
-    added = 0
-    for td in _TOOLS_SEED:
-        # No pisamos una que ya exista con ese nombre (manual o de nota)
-        if db.query(Tool).filter(Tool.name.ilike(td["name"])).first():
-            continue
-        db.add(Tool(
-            name=td["name"], url=td.get("url"), description=td.get("description"),
-            category=td.get("category"), tool_type=td.get("tool_type", "software"),
-            requires_api=False, mention_count=1,
-            tags=json.dumps(["catalogo-base"]),
-        ))
-        added += 1
-    db.commit()
-    return {"action": "added", "count": added}
+    Las herramientas base van siempre en el módulo, marcadas con la etiqueta
+    'catalogo-base' para distinguirlas de las del usuario. Se siembra una única
+    vez (marcador en disco) A PROPÓSITO: así, si el usuario borra una base, no
+    reaparece al reiniciar; si la quiere de vuelta, la re-añade a mano como
+    cualquier otra. No hay boton de "catalogo base": están o el usuario las quitó.
+    """
+    marker = RUNTIME_DIR / ".tools_base_seeded"
+    if marker.exists():
+        return
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        for td in _TOOLS_SEED:
+            # No duplicamos una que ya exista con ese nombre (manual o de nota)
+            if db.query(Tool).filter(Tool.name.ilike(td["name"])).first():
+                continue
+            db.add(Tool(
+                name=td["name"], url=td.get("url"), description=td.get("description"),
+                category=td.get("category"), tool_type=td.get("tool_type", "software"),
+                requires_api=False, mention_count=1,
+                tags=json.dumps(["catalogo-base"]),
+            ))
+        db.commit()
+    finally:
+        db.close()
+    marker.write_text("1", encoding="utf-8")
 
 
 def _tool_dict(t: Tool) -> dict:
