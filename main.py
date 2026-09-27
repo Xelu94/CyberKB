@@ -1939,6 +1939,16 @@ def delete_mitre(mid: int, db: Session = Depends(get_db)):
 
 # ─── Forensic Mode ────────────────────────────────────────────────────────────
 
+def _family_from_vt_label(label: str) -> str:
+    """Extrae la familia de la etiqueta sugerida de VT: 'ransomware.wannacry/x'
+    → 'Wannacry'. Se usa solo como respaldo de la firma de MalwareBazaar."""
+    if not label:
+        return ""
+    core = label.split(".", 1)[1] if "." in label else label   # quita la categoría
+    fam = core.split("/")[0].strip()                           # familia antes de la variante
+    return fam.capitalize()
+
+
 @app.get("/api/forensic/keys")
 def forensic_keys():
     """[Módulo Forense] Presencia de las keys que usa el pipeline. Lo usa el
@@ -2035,8 +2045,20 @@ async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
     else:
         verdict = "infeccion" if not mb_data.get("error") else "sin-datos"
 
+    # Nombre de familia SOLO si lo tenemos con confianza: la firma curada de
+    # MalwareBazaar, o (con muchas detecciones) la etiqueta sugerida de VT. Si no,
+    # el histórico se queda con el veredicto genérico ("Posible infección"…).
+    familia = ""
+    if not mb_data.get("error") and mb_data.get("signature"):
+        familia = str(mb_data["signature"]).strip()
+    elif det and det >= 5 and vt_data.get("suggested_label"):
+        familia = _family_from_vt_label(vt_data["suggested_label"])
+
+    base_tags = ["forense", "malware", "veredicto:" + verdict]
+    if familia:
+        base_tags.append("familia:" + familia)
     tags = note_data.get("tags", [])
-    tags_json = json.dumps(list(set(["forense", "malware", "veredicto:" + verdict] + tags)))
+    tags_json = json.dumps(list(set(base_tags + tags)))
 
     n = Note(
         title=title,

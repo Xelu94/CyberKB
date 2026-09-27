@@ -4487,6 +4487,13 @@ const FORENSIC_VERDICT={
   'sin-datos':['Sin datos',        'var(--text3)', 'var(--bg4)'],
 };
 function forensicVerdictBadge(note){
+  // Si identificamos la familia con confianza (etiqueta familia:*), mostramos el
+  // NOMBRE (ej. 🦠 WannaCry) en vez del veredicto genérico.
+  const fam=(note.tags||[]).find(t=>t.startsWith('familia:'));
+  if(fam){
+    const name=fam.slice(8);
+    return `<span title="Familia identificada" style="flex-shrink:0;font-size:9px;font-family:var(--mono);font-weight:700;color:var(--red);background:rgba(255,51,68,.12);border:1px solid var(--red);border-radius:10px;padding:2px 8px;white-space:nowrap;">🦠 ${esc(name)}</span>`;
+  }
   const tag=(note.tags||[]).find(t=>t.startsWith('veredicto:'));
   const v=tag&&FORENSIC_VERDICT[tag.slice(10)];
   if(!v) return '';
