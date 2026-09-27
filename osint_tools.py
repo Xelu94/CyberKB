@@ -663,7 +663,7 @@ def _ts(unix: int | None) -> str:
 async def hash_vt(hash_str: str) -> dict:
     """Detailed VirusTotal file/hash analysis for threat intelligence."""
     if not VT_KEY:
-        return {"error": "VIRUSTOTAL_API_KEY no configurado en .env",
+        return {"error": "VIRUSTOTAL_API_KEY no configurado en .env", "auth_error": True,
                 "info": "Obtén API key gratuita en https://www.virustotal.com/gui/join-us"}
     hash_str = hash_str.strip().lower()
     length = len(hash_str)
@@ -680,6 +680,8 @@ async def hash_vt(hash_str: str) -> dict:
     try:
         async with httpx.AsyncClient(timeout=25, headers=vt_headers) as client:
             r = await client.get(f"https://www.virustotal.com/api/v3/files/{hash_str}")
+            if r.status_code in (401, 403):
+                return {"error": "VirusTotal: API key inválida o sin permisos", "auth_error": True}
             if r.status_code == 404:
                 return {"error": "Hash no encontrado en VirusTotal — muestra desconocida o nunca subida."}
             if r.status_code != 200:
@@ -834,8 +836,8 @@ async def hash_malwarebazaar(hash_str: str) -> dict:
     """MalwareBazaar hash lookup — requires free API key from abuse.ch."""
     if not MALWAREBAZAAR_KEY:
         return {
-            "error": "MALWAREBAZAAR_API_KEY no configurada en .env",
-            "info": "Regístrate gratis en https://bazaar.abuse.ch/api/ para obtener tu API key.",
+            "error": "MALWAREBAZAAR_API_KEY no configurada en .env", "auth_error": True,
+            "info": "Regístrate gratis en https://auth.abuse.ch/ para obtener tu Auth-Key.",
         }
     hash_str = hash_str.strip().lower()
     if len(hash_str) != 64:
@@ -849,10 +851,13 @@ async def hash_malwarebazaar(hash_str: str) -> dict:
             )
             data = r.json()
 
-        if data.get("query_status") == "hash_not_found":
+        qs = data.get("query_status")
+        if qs == "hash_not_found":
             return {"error": "Hash no encontrado en MalwareBazaar — muestra desconocida."}
-        if data.get("query_status") != "ok":
-            return {"error": f"MalwareBazaar: {data.get('query_status', 'error desconocido')}"}
+        if qs in ("unauthorized", "illegal_auth_key", "no_auth_key"):
+            return {"error": "MalwareBazaar: Auth-Key inválida o ausente", "auth_error": True}
+        if qs != "ok":
+            return {"error": f"MalwareBazaar: {qs or 'error desconocido'}"}
 
         samples = data.get("data", [])
         if not samples:

@@ -1939,19 +1939,64 @@ def delete_mitre(mid: int, db: Session = Depends(get_db)):
 
 # ─── Forensic Mode ────────────────────────────────────────────────────────────
 
+@app.get("/api/forensic/keys")
+def forensic_keys():
+    """[Módulo Forense] Presencia de las keys que usa el pipeline. Lo usa el
+    frontend para avisar antes de analizar si falta alguna esencial. Solo dice si
+    están puestas (no si son válidas — eso se comprueba al analizar de verdad)."""
+    return {
+        "virustotal":    bool(osint.VT_KEY),
+        "malwarebazaar": bool(osint.MALWAREBAZAAR_KEY),
+        "anyrun":        bool(osint.ANYRUN_KEY),
+    }
+
+
 @app.post("/api/forensic/analyze")
 async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
     """Full forensic pipeline: VT + MalwareBazaar (parallel) → Any.run (conditional) → AI note."""
     import asyncio
 
     hash_str = hash.strip().lower()
-    if len(hash_str) != 64 or not re.match(r"^[0-9a-f]{64}$", hash_str):
-        raise HTTPException(400, "Se requiere hash SHA256 (64 caracteres hexadecimales)")
+    if not re.match(r"^[0-9a-f]{32}$|^[0-9a-f]{40}$|^[0-9a-f]{64}$", hash_str):
+        raise HTTPException(400, "Hash inválido — se admite MD5 (32), SHA1 (40) o SHA256 (64 hex)")
 
     # ── Step 1+2: VT + MalwareBazaar in parallel ──────────────────────────────
     vt_task  = osint.hash_vt(hash_str)
     mb_task  = osint.hash_malwarebazaar(hash_str)
     vt_data, mb_data = await asyncio.gather(vt_task, mb_task)
+
+    # ── 1C: chequeo de keys ───────────────────────────────────────────────────
+    # Si una key esencial no está o no funciona (auth_error), paramos ANTES de
+    # gastar la IA y avisamos. MalwareBazaar solo consulta SHA256; con MD5/SHA1
+    # su error no es de key, así que solo cuenta como fallo de key si es SHA256.
+    bad_keys = []
+    if vt_data.get("auth_error"):
+        bad_keys.append("VirusTotal")
+    if mb_data.get("auth_error") and len(hash_str) == 64:
+        bad_keys.append("MalwareBazaar")
+    if bad_keys:
+        raise HTTPException(400, "API keys no configuradas o inválidas: "
+                            + ", ".join(bad_keys) + ". Configúralas en Ajustes (⚙).")
+
+    # ── 2A: sin datos → no alucinar ───────────────────────────────────────────
+    # Si ni VT ni MalwareBazaar tienen datos del hash (desconocido/nunca subido),
+    # NO llamamos a la IA (inventaría el informe): guardamos una nota honesta.
+    if vt_data.get("error") and mb_data.get("error"):
+        title = f"Análisis forense — {hash_str[:16]} — sin datos"
+        body = (f"**Hash**: `{hash_str}`\n\n## Sin datos de reputación\n"
+                "Ni VirusTotal ni MalwareBazaar tienen información de este hash "
+                "(muestra desconocida o nunca subida). No se genera análisis para "
+                "no especular sin datos.\n\n"
+                f"- VirusTotal: {vt_data.get('error', '—')}\n"
+                f"- MalwareBazaar: {mb_data.get('error', '—')}\n")
+        n = Note(title=title, content=body, category="forense",
+                 subcategory="malware-analysis", summary="Hash sin datos de reputación",
+                 tags=json.dumps(["forense", "malware", "sin-datos"]),
+                 source_file=f"forensic:{hash_str[:16]}")
+        db.add(n); db.commit(); db.refresh(n)
+        return {"note_id": n.id, "title": title, "vt": vt_data, "mb": mb_data,
+                "anyrun": {"note": "no consultado (sin datos)"}, "timeline": {},
+                "cves_found": 0, "mitre_found": 0, "tags": ["sin-datos"], "no_data": True}
 
     # ── Step 3: Any.run if VT detections > 5 ─────────────────────────────────
     anyrun_data: dict = {"note": "No consultado (score VT ≤ 5 o error)"}
