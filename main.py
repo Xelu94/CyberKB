@@ -2018,9 +2018,9 @@ async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
     note_data = ai.generate_forensic_note(hash_str, vt_data, mb_data, anyrun_data)
 
     # ── Step 5: Persist note ──────────────────────────────────────────────────
-    from datetime import date as _date
     title = note_data.get("title") or f"Análisis forense — {hash_str[:16]}"
     content_body = note_data.get("content", "")
+    htype = {32: "MD5", 40: "SHA1", 64: "SHA256"}.get(len(hash_str), "Hash")
 
     # Prepend timeline block to content
     tl = note_data.get("timeline", {})
@@ -2034,8 +2034,8 @@ async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
     if tl_md:
         content_body = f"## Timeline\n{tl_md}\n\n" + content_body
 
-    # Include raw hash at top
-    content_body = f"**SHA256**: `{hash_str}`\n\n" + content_body
+    # Include raw hash at top (con su tipo real: MD5/SHA1/SHA256)
+    content_body = f"**{htype}**: `{hash_str}`\n\n" + content_body
 
     # Veredicto de 2 palabras para el histórico (según detecciones de VirusTotal;
     # si VT no dio score pero MalwareBazaar sí conoce el hash, es malware conocido).

@@ -4488,7 +4488,7 @@ async function initForensic(){
     // D — el paso Any.run solo se muestra si su key está configurada (es opcional)
     const showAR=!!k.anyrun;
     ['fstep-ar','farrow-ar'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=showAR?'':'none';});
-  }catch(e){}
+  }catch(e){/* el chequeo de keys es best-effort: si falla, sin banner y a seguir */}
   if(!_forensicShowing) document.getElementById('forensicBody').innerHTML=forensicIdleHTML();
 }
 
