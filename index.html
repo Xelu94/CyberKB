@@ -4479,6 +4479,20 @@ function forensicIdleHTML(){
     </div>`+renderForensicHistory();
 }
 
+// Veredicto de 2 palabras (badge) según la etiqueta veredicto:* guardada en la nota.
+const FORENSIC_VERDICT={
+  infeccion:  ['Posible infección','var(--red)',   'rgba(255,51,68,.12)'],
+  sospechoso: ['Sospechoso',       'var(--orange)','rgba(255,102,0,.12)'],
+  limpio:     ['No infectado',     'var(--green)', 'rgba(0,255,136,.12)'],
+  'sin-datos':['Sin datos',        'var(--text3)', 'var(--bg4)'],
+};
+function forensicVerdictBadge(note){
+  const tag=(note.tags||[]).find(t=>t.startsWith('veredicto:'));
+  const v=tag&&FORENSIC_VERDICT[tag.slice(10)];
+  if(!v) return '';
+  return `<span style="flex-shrink:0;font-size:9px;font-family:var(--mono);font-weight:700;color:${v[1]};background:${v[2]};border:1px solid ${v[1]};border-radius:10px;padding:2px 8px;white-space:nowrap;">${v[0]}</span>`;
+}
+
 // 2C — Lista de informes forenses anteriores (notas categoría "forense").
 function renderForensicHistory(){
   const notes=(S.notes||[]).filter(n=>n.category==='forense')
@@ -4492,6 +4506,7 @@ function renderForensicHistory(){
         <div style="font-size:12px;color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(n.title||'(sin título)')}</div>
         <div style="font-size:9px;color:var(--text3);font-family:var(--mono);">${esc((n.created_at||'').slice(0,10))}${n.summary?' · '+esc(n.summary.slice(0,70)):''}</div>
       </div>
+      ${forensicVerdictBadge(n)}
       <span style="font-size:10px;color:var(--cyan);flex-shrink:0;">ver →</span>
     </div>`).join('')}
   </div>`;

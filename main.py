@@ -1991,7 +1991,7 @@ async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
                 f"- MalwareBazaar: {mb_data.get('error', '—')}\n")
         n = Note(title=title, content=body, category="forense",
                  subcategory="malware-analysis", summary="Hash sin datos de reputación",
-                 tags=json.dumps(["forense", "malware", "sin-datos"]),
+                 tags=json.dumps(["forense", "malware", "sin-datos", "veredicto:sin-datos"]),
                  source_file=f"forensic:{hash_str[:16]}")
         db.add(n); db.commit(); db.refresh(n)
         return {"note_id": n.id, "title": title, "vt": vt_data, "mb": mb_data,
@@ -2027,8 +2027,16 @@ async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
     # Include raw hash at top
     content_body = f"**SHA256**: `{hash_str}`\n\n" + content_body
 
+    # Veredicto de 2 palabras para el histórico (según detecciones de VirusTotal;
+    # si VT no dio score pero MalwareBazaar sí conoce el hash, es malware conocido).
+    det = vt_data.get("detected", 0) if not vt_data.get("error") else None
+    if det is not None:
+        verdict = "limpio" if det == 0 else ("sospechoso" if det <= 4 else "infeccion")
+    else:
+        verdict = "infeccion" if not mb_data.get("error") else "sin-datos"
+
     tags = note_data.get("tags", [])
-    tags_json = json.dumps(list(set(["forense", "malware"] + tags)))
+    tags_json = json.dumps(list(set(["forense", "malware", "veredicto:" + verdict] + tags)))
 
     n = Note(
         title=title,
