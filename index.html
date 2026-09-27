@@ -1447,7 +1447,7 @@ EXEC xp_cmdshell 'whoami';</pre>
           <span class="fstep-icon" id="ficon-mb">⟳</span>
           <span style="font-size:11px;font-family:var(--mono);">MalwareBazaar</span>
         </div>
-        <div style="color:var(--text3);font-size:14px;">→</div>
+        <div id="farrow-ar" style="color:var(--text3);font-size:14px;">→</div>
         <div class="forensic-step" id="fstep-ar">
           <span class="fstep-icon" id="ficon-ar">·</span>
           <span style="font-size:11px;font-family:var(--mono);color:var(--text3);">Any.run</span>
@@ -4285,7 +4285,8 @@ async function runForensic(){
   body.innerHTML=`<div style="text-align:center;padding:40px;color:var(--text3);font-family:var(--mono)">
     <div style="font-size:28px;margin-bottom:8px">⟳</div>
     Ejecutando pipeline forense...<br>
-    <span style="font-size:10px;">VT + MalwareBazaar en paralelo, luego síntesis IA</span>
+    <span style="font-size:10px;">VT + MalwareBazaar en paralelo, luego síntesis IA</span><br>
+    <span style="font-size:10px;color:var(--text3);opacity:.8;">⏳ la síntesis de la IA puede tardar ~1 minuto, es normal</span>
   </div>`;
 
   try{
@@ -4324,6 +4325,8 @@ function _setFStep(step,state){
 }
 
 let _forensicShowing=false;   // ¿el body está mostrando un resultado? (para no pisarlo con el historial)
+let _forensicIOCs='';         // indicadores del último resultado, para el botón "⎘ IOCs"
+function copyForensicIOCs(btn){ enumCopy(btn, _forensicIOCs); }
 function renderForensicResult(hash, data){
   _forensicShowing=true;
   const body=document.getElementById('forensicBody');
@@ -4361,11 +4364,27 @@ function renderForensicResult(hash, data){
       `).join('')}
     </div>`:'';
 
+  // E — tipo de hash (por longitud). B — indicadores (IOCs) para copiar.
+  const htype=hash.length===32?'MD5':hash.length===40?'SHA1':'SHA256';
+  const _asStr=x=>typeof x==='string'?x:(x&&(x.id||x.value)||'');
+  const _domains=(vt.contacted_domains||[]).map(_asStr).filter(Boolean);
+  const _ips=(vt.contacted_ips||[]).map(_asStr).filter(Boolean);
+  const _names=[...new Set([vt.file_name, mb.file_name, ...(vt.names||[])].filter(Boolean))];
+  const iocLines=['Hash ('+htype+'): '+hash];
+  const fam=mb.signature||vt.suggested_label||vt.family; if(fam) iocLines.push('Familia: '+fam);
+  if(_names.length) iocLines.push('Nombres: '+_names.join(', '));
+  if(_domains.length) iocLines.push('Dominios C2: '+_domains.join(', '));
+  if(_ips.length) iocLines.push('IPs C2: '+_ips.join(', '));
+  _forensicIOCs=iocLines.join('\n');
+
   let html=`
     <div style="margin-bottom:16px;">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
         <span style="font-family:var(--mono);font-size:13px;color:${scoreCol};font-weight:700">${det}/${tot} motores</span>
         <span style="font-size:12px;color:var(--text2)">${esc(vt.suggested_label||vt.family||mb.file_name||hash.slice(0,16)+'…')}</span>
+        <span class="tool-badge" style="color:var(--text3);border-color:var(--border2);background:var(--bg4)">${htype}</span>
+        <button class="enum-copy-btn" onclick='enumCopy(this,${jarg(hash)})' title="Copiar el hash">⎘ hash</button>
+        <button class="enum-copy-btn" onclick="copyForensicIOCs(this)" title="Copiar indicadores: hash, familia, nombres y red (si hay)">⎘ IOCs</button>
         <a href="#" onclick="loadNote(${data.note_id});switchTab('editor');return false"
           style="font-size:11px;padding:3px 10px;background:var(--bg4);border:1px solid var(--green);border-radius:4px;color:var(--green);text-decoration:none;">
           ✎ Ver nota #${data.note_id}</a>
@@ -4466,6 +4485,9 @@ async function initForensic(){
       banner.style.display='';
       banner.innerHTML='⚠ Faltan API keys ('+missing.join(', ')+'). Configúralas con el botón de Ajustes (⚙) para poder analizar.';
     } else banner.style.display='none';
+    // D — el paso Any.run solo se muestra si su key está configurada (es opcional)
+    const showAR=!!k.anyrun;
+    ['fstep-ar','farrow-ar'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=showAR?'':'none';});
   }catch(e){}
   if(!_forensicShowing) document.getElementById('forensicBody').innerHTML=forensicIdleHTML();
 }
@@ -4514,9 +4536,26 @@ function renderForensicHistory(){
         <div style="font-size:9px;color:var(--text3);font-family:var(--mono);">${esc((n.created_at||'').slice(0,10))}${n.summary?' · '+esc(n.summary.slice(0,70)):''}</div>
       </div>
       ${forensicVerdictBadge(n)}
+      <button onclick="deleteForensicNote(${n.id},event)" title="Borrar informe" style="background:none;border:none;color:var(--red);cursor:pointer;padding:0;line-height:0;display:inline-flex;align-items:center;flex-shrink:0;">${TRASH_SVG}</button>
       <span style="font-size:10px;color:var(--cyan);flex-shrink:0;">ver →</span>
     </div>`).join('')}
   </div>`;
+}
+
+// C — Borrar un informe forense desde el histórico (borra la nota).
+async function deleteForensicNote(id, ev){
+  if(ev) ev.stopPropagation();
+  if(!confirm('¿Borrar este informe forense?')) return;
+  try{
+    await API.del('/api/notes/'+id);
+    await loadAll();
+    _forensicShowing=false;
+    document.getElementById('forensicBody').innerHTML=forensicIdleHTML();
+    setStatus('Informe forense borrado');
+  }catch(e){
+    if(e.status===404){ await loadAll(); document.getElementById('forensicBody').innerHTML=forensicIdleHTML(); }
+    else setStatus('Error borrando: '+e.message,'error');
+  }
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
