@@ -985,9 +985,6 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
                 <button class="enum-copy-btn" id="nmapCmd2copy" onclick="enumCopy(this,document.getElementById('nmapCmd2').textContent)" disabled>⎘ Copiar</button>
               </div>
             </div>
-            <div style="margin-top:8px;text-align:right;">
-              <button class="btn-outline" style="font-size:11px;color:var(--purple);border-color:rgba(170,85,255,.4);" onclick="saveNmapResult(this)">💾 Guardar resultado como nota</button>
-            </div>
           </div>
         </div>
       </div>
@@ -5432,34 +5429,6 @@ function openDictModal(){
   document.getElementById('dictBody').innerHTML=html;
   document.getElementById('dictModal').classList.add('show');
   const _dm=document.querySelector('#dictModal .modal'); if(_dm) _dm.scrollTop=0;
-}
-
-async function saveNmapResult(btn){
-  const ip=(document.getElementById('nmapIP').value||'TARGET_IP').trim();
-  const cmd1=document.getElementById('nmapCmd1').textContent.trim();
-  const cmd2raw=document.getElementById('nmapCmd2').textContent.trim();
-  const cmd2=cmd2raw.startsWith('Introduce')?null:cmd2raw;
-  const now=new Date().toISOString().slice(0,10);
-  const content=`## Escaneo Nmap — ${ip}  \nFecha: ${now}\n\n### Fase 1 — Descubrimiento de puertos\n\`\`\`\n${cmd1}\n\`\`\`\n\n${cmd2?`### Fase 2 — Análisis en profundidad\n\`\`\`\n${cmd2}\n\`\`\`\n\n`:''}\n> Generado desde el módulo Enumeración de CyberKB`;
-  const orig=btn.textContent;
-  btn.textContent='⟳ Guardando...';btn.disabled=true;
-  try{
-    const res=await API.post('/api/notes',{
-      title:`Nmap — ${ip} — ${now}`,
-      content,
-      category:'tecnica',
-      subcategory:'enumeracion',
-      tags:['nmap','enumeracion',ip]
-    });
-    btn.textContent='✓ Nota creada';
-    btn.style.color='var(--green)';btn.style.borderColor='var(--green)';
-    await loadAll();
-    setStatus('Nota Nmap creada — ID #'+res.id);
-    setTimeout(()=>{btn.textContent=orig;btn.disabled=false;btn.style.color='';btn.style.borderColor='';},2500);
-  }catch(e){
-    btn.textContent=orig;btn.disabled=false;
-    setStatus('Error creando nota: '+e.message,'error');
-  }
 }
 
 function switchEnumTab(name){
