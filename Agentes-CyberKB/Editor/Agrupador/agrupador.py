@@ -121,10 +121,10 @@ ESQUEMA = _objeto({
         "type": TEXTO,
         "description": TEXTO,
     }),
-    "relations": {
-        "type": "array",
-        "items": {"type": "array", "items": TEXTO, "minItems": 2, "maxItems": 2},
-    },
+    # Un par [a, b] como array de 2 elementos no es representable: la API de
+    # Claude rechaza minItems/maxItems distintos de 0 o 1 en arrays de un
+    # json_schema de salida. Se modela como objeto {a, b} en su lugar.
+    "relations": _lista({"a": TEXTO, "b": TEXTO}),
 })
 
 
@@ -261,12 +261,15 @@ def _validar(bruto: dict) -> dict:
     entidades = _unicos(entidades, "name", LIMITES["max_entidades"])
 
     # Una relacion hacia una entidad que no existe deja un nodo huerfano en el grafo.
+    # El modelo entrega cada par como {"a": ..., "b": ...} (ver ESQUEMA), pero de
+    # aqui hacia abajo (validacion, Agente-BBDD, documentacion) se sigue tratando
+    # como el par [a, b] de siempre -- el cambio de forma queda aislado aqui.
     nombres = {e["name"].lower(): e["name"] for e in entidades}
     relaciones: list[list[str]] = []
     for par in bruto.get("relations") or []:
-        if not isinstance(par, list) or len(par) != 2:
+        if not isinstance(par, dict):
             continue
-        a, b = nombres.get(_texto(par[0]).lower()), nombres.get(_texto(par[1]).lower())
+        a, b = nombres.get(_texto(par.get("a")).lower()), nombres.get(_texto(par.get("b")).lower())
         if a and b and a != b and [a, b] not in relaciones and [b, a] not in relaciones:
             relaciones.append([a, b])
 

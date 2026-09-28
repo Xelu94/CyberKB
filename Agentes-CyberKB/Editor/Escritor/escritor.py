@@ -105,7 +105,7 @@ def _cliente() -> anthropic.Anthropic:
 
 
 def _resumir(texto: str) -> dict:
-    respuesta = _cliente().beta.messages.create(
+    argumentos = dict(
         model=MODELO["id"],
         max_tokens=MODELO["max_tokens"],
         system=_prompt_sistema(),
@@ -115,11 +115,15 @@ def _resumir(texto: str) -> dict:
             "effort": MODELO["effort"],
             "format": {"type": "json_schema", "schema": ESQUEMA_RESUMEN},
         },
-        # Un corpus de ciberseguridad puede activar el clasificador de seguridad;
-        # el reintento en el modelo de respaldo evita perder el documento.
-        betas=["server-side-fallback-2026-06-01"],
-        fallbacks=[{"model": MODELO["respaldo"]}],
     )
+    # No todos los modelos tienen un modelo de respaldo valido (verificado via
+    # GET /v1/models/<id> con el beta de fallback, 2026-09-28) -- el parametro
+    # solo se manda si hay uno configurado.
+    if MODELO.get("respaldo"):
+        argumentos["betas"] = ["server-side-fallback-2026-06-01"]
+        argumentos["fallbacks"] = [{"model": MODELO["respaldo"]}]
+
+    respuesta = _cliente().beta.messages.create(**argumentos)
 
     if respuesta.stop_reason == "refusal":
         raise RuntimeError("el modelo declino resumir el documento")

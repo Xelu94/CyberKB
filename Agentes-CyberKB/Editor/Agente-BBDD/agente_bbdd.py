@@ -19,8 +19,10 @@ nombre lleva guion, asi que no se puede importar como paquete:
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
+import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -48,6 +50,9 @@ LONGITUDES = CFG["longitudes"]
 INCREMENTAR = CFG["comportamiento"]["incrementar_contadores"]
 CONSERVAR = CFG["comportamiento"]["conservar_valor_si_el_nuevo_esta_vacio"]
 ERRORES = CFG["errores"]
+
+OBSI_URL = os.getenv("OBSI_URL", CFG["obsi"]["url"])
+OBSI_TIMEOUT = CFG["obsi"]["timeout_segundos"]
 
 router = APIRouter(prefix="/api/bbdd", tags=["bbdd"])
 
@@ -143,9 +148,13 @@ def _catalogo(nombre: str, tipo_propuesto: str) -> tuple[str | None, str]:
     return url, "web" if tipo_propuesto == "web" else "software"
 
 
-def _herramientas(db: Session, nota: Note, datos: Agrupacion) -> int:
-    """tools.name es UNIQUE: hay que buscar sin distinguir mayusculas."""
-    tocadas = 0
+def _herramientas(db: Session, nota: Note, datos: Agrupacion) -> list[int]:
+    """tools.name es UNIQUE: hay que buscar sin distinguir mayusculas.
+
+    Devuelve los ids de las filas tocadas (no solo el recuento): Obsi los
+    necesita para releer exactamente esas filas y sincronizar el vault.
+    """
+    ids: list[int] = []
     for bruto in datos.tools:
         nombre = _texto(bruto.get("name"), LONGITUDES["tool_name"])
         if not nombre:
@@ -183,15 +192,19 @@ def _herramientas(db: Session, nota: Note, datos: Agrupacion) -> int:
         db.flush()
         if fila not in nota.tools:
             nota.tools.append(fila)
-        tocadas += 1
-    return tocadas
+        ids.append(fila.id)
+    return ids
 
 
-def _comandos(db: Session, nota: Note, datos: Agrupacion) -> int:
-    """commands no tiene UNIQUE: sin este filtro, cada reintento duplicaria filas."""
+def _comandos(db: Session, nota: Note, datos: Agrupacion) -> list[int]:
+    """commands no tiene UNIQUE: sin este filtro, cada reintento duplicaria filas.
+
+    Devuelve los ids de las filas tocadas (no solo el recuento): Obsi los
+    necesita para releer exactamente esas filas y sincronizar el vault.
+    """
     categoria = _texto(datos.category, LONGITUDES["command_category"]) or None
     etiquetas = json.dumps(datos.tags, ensure_ascii=False)
-    tocados = 0
+    ids: list[int] = []
 
     for bruto in datos.commands:
         linea = _texto(bruto.get("command"))
@@ -205,7 +218,7 @@ def _comandos(db: Session, nota: Note, datos: Agrupacion) -> int:
         banderas = json.dumps(bruto.get("flags") or [], ensure_ascii=False)
 
         if fila is None:
-            db.add(Command(
+            fila = Command(
                 command=linea,
                 description=_texto(bruto.get("description")) or None,
                 tool_name=_texto(bruto.get("tool_name"), LONGITUDES["command_tool_name"]) or None,
@@ -214,21 +227,29 @@ def _comandos(db: Session, nota: Note, datos: Agrupacion) -> int:
                 tags=etiquetas,
                 category=categoria,
                 note_id=nota.id,
-            ))
+            )
+            db.add(fila)
         else:
             _fusionar(fila, "description", _texto(bruto.get("description")))
             _fusionar(fila, "tool_name", _texto(bruto.get("tool_name"), LONGITUDES["command_tool_name"]))
             _fusionar(fila, "os", _texto(bruto.get("os"), LONGITUDES["command_os"]))
             _fusionar(fila, "flags", banderas)
-        tocados += 1
 
-    db.flush()
-    return tocados
+        db.flush()
+        ids.append(fila.id)
+
+    return ids
 
 
-def _cves(db: Session, nota: Note, datos: Agrupacion) -> int:
-    """cves.cve_id es UNIQUE y global: el mismo CVE lo citan varios documentos."""
-    tocados = 0
+def _cves(db: Session, nota: Note, datos: Agrupacion) -> list[str]:
+    """cves.cve_id es UNIQUE y global: el mismo CVE lo citan varios documentos.
+
+    Devuelve los `cve_id` tocados (no ids numericos ni recuento): es la clave
+    con la que el vault identifica a un CVE (`migrate_to_obsidian.py` usa
+    `cve_id`, no el id de fila, como identidad de la nota), asi que es lo que
+    Obsi necesita para localizar/crear la nota correcta.
+    """
+    ids: list[str] = []
     for bruto in datos.cves:
         identificador = _texto(bruto.get("cve_id"), LONGITUDES["cve_id"]).upper()
         if not identificador:
@@ -242,7 +263,7 @@ def _cves(db: Session, nota: Note, datos: Agrupacion) -> int:
         ).scalars().first()
 
         if fila is None:
-            db.add(CVE(
+            fila = CVE(
                 cve_id=identificador,
                 title=_texto(bruto.get("title"), LONGITUDES["cve_title"]) or None,
                 description=_texto(bruto.get("description")) or None,
@@ -250,7 +271,8 @@ def _cves(db: Session, nota: Note, datos: Agrupacion) -> int:
                 cvss=puntos,
                 affected=_texto(bruto.get("affected")) or None,
                 note_id=nota.id,
-            ))
+            )
+            db.add(fila)
         else:
             _fusionar(fila, "title", _texto(bruto.get("title"), LONGITUDES["cve_title"]))
             _fusionar(fila, "description", _texto(bruto.get("description")))
@@ -261,14 +283,20 @@ def _cves(db: Session, nota: Note, datos: Agrupacion) -> int:
             # documento que lo cito y los demas lo pierden de vista.
             if fila.note_id is None:
                 fila.note_id = nota.id
-        tocados += 1
 
-    db.flush()
-    return tocados
+        db.flush()
+        ids.append(fila.cve_id)
+
+    return ids
 
 
-def _mitre(db: Session, nota: Note, datos: Agrupacion) -> int:
-    tocadas = 0
+def _mitre(db: Session, nota: Note, datos: Agrupacion) -> list[str]:
+    """Devuelve los `technique_id` tocados (no ids numericos ni recuento): es la
+    clave con la que el vault identifica a una tecnica MITRE (una nota agrega
+    todas las filas que comparten `technique_id`, ver `migrate_to_obsidian.py`),
+    asi que es lo que Obsi necesita para localizar/crear la nota correcta.
+    """
+    ids: list[str] = []
     for bruto in datos.mitre:
         identificador = _texto(bruto.get("technique_id"), LONGITUDES["mitre_technique_id"]).upper()
         if not identificador:
@@ -286,21 +314,23 @@ def _mitre(db: Session, nota: Note, datos: Agrupacion) -> int:
         contexto = _texto(bruto.get("context_snippet"))
 
         if fila is None:
-            db.add(MitreTechnique(
+            fila = MitreTechnique(
                 note_id=nota.id,
                 technique_id=identificador,
                 technique_name=nombre or None,
                 tactic=tactica or None,
                 context_snippet=contexto or None,
-            ))
+            )
+            db.add(fila)
         else:
             _fusionar(fila, "technique_name", nombre)
             _fusionar(fila, "tactic", tactica)
             _fusionar(fila, "context_snippet", contexto)
-        tocadas += 1
 
-    db.flush()
-    return tocadas
+        db.flush()
+        ids.append(fila.technique_id)
+
+    return ids
 
 
 def _entidades(db: Session, nota: Note, datos: Agrupacion) -> dict[str, GraphEntity]:
@@ -384,6 +414,25 @@ def _relaciones(db: Session, mapa: dict[str, GraphEntity], pares: list[list[str]
     return tocadas
 
 
+# ---------------------------------------------------------------------- entrega
+
+
+def _entregar_obsi(payload: dict) -> bool:
+    """Avisa a Obsi de que hay filas nuevas/actualizadas que sincronizar en el
+    vault. Fallo blando (ver Editor/Obsi/DECISIONES_OBSI.md §7): la BBDD ya esta
+    guardada, que Obsi no responda no invalida el trabajo de este agente ni debe
+    obligar a repetir la cadena entera desde el Agrupador.
+    """
+    if not OBSI_URL:
+        return False
+    try:
+        respuesta = httpx.post(OBSI_URL, json=payload, timeout=OBSI_TIMEOUT)
+        respuesta.raise_for_status()
+        return True
+    except httpx.HTTPError:
+        return False
+
+
 # ----------------------------------------------------------------- orquestacion
 
 
@@ -391,18 +440,18 @@ def _procesar(datos: Agrupacion) -> dict:
     db = SessionLocal()
     try:
         nota = _nota(db, datos)
-        recuento = {
-            "nota_id": nota.id,
-            "herramientas": _herramientas(db, nota, datos),
-            "comandos": _comandos(db, nota, datos),
-            "cves": _cves(db, nota, datos),
-            "mitre": _mitre(db, nota, datos),
-        }
+        herramientas_ids = _herramientas(db, nota, datos)
+        comandos_ids = _comandos(db, nota, datos)
+        cves_ids = _cves(db, nota, datos)
+        mitre_ids = _mitre(db, nota, datos)
         mapa = _entidades(db, nota, datos)
-        recuento["entidades"] = len(mapa)
-        recuento["relaciones"] = _relaciones(db, mapa, datos.relations)
+        relaciones = _relaciones(db, mapa, datos.relations)
 
         db.commit()
+        # Capturado como valor plano ANTES de cerrar la sesion: tras el commit,
+        # SQLAlchemy expira los atributos del objeto, y leer `nota.id` despues
+        # de `db.close()` dispara `DetachedInstanceError`, no un `int`.
+        nota_id = nota.id
     except Exception:
         # Una escritura a medias deja la base incoherente y el reintento no
         # tendria forma de saber por donde se quedo.
@@ -411,7 +460,30 @@ def _procesar(datos: Agrupacion) -> dict:
     finally:
         db.close()
 
-    return {"id_resumen": datos.id_resumen, "guardado": True, **recuento}
+    # Ids ademas del recuento: Obsi los necesita para releer exactamente estas
+    # filas (ya confirmadas en SQLite) y sincronizar el vault sin tener que
+    # recalcular relaciones el solo. Se le pasan justo despues del commit, nunca
+    # antes: Obsi no debe releer una fila que todavia no esta confirmada.
+    ids_obsi = {
+        "nota_id": nota_id,
+        "herramientas_ids": herramientas_ids,
+        "comandos_ids": comandos_ids,
+        "cves_ids": cves_ids,
+        "mitre_ids": mitre_ids,
+    }
+
+    return {
+        "id_resumen": datos.id_resumen,
+        "guardado": True,
+        **ids_obsi,
+        "herramientas": len(herramientas_ids),
+        "comandos": len(comandos_ids),
+        "cves": len(cves_ids),
+        "mitre": len(mitre_ids),
+        "entidades": len(mapa),
+        "relaciones": relaciones,
+        "obsi_entregado": _entregar_obsi(ids_obsi),
+    }
 
 
 @router.post("/ingesta")

@@ -1,13 +1,23 @@
 # Agente-BBDD
 
 Recibe la agrupación del **Agrupador** y la reparte entre las tablas de la aplicación.
-Es el único agente de la cadena que escribe en la base de datos.
+Es el único agente de la cadena que escribe en la base de datos. Tras confirmar en
+SQLite, avisa al agente **Obsi** para que sincronice el vault de Obsidian con lo que
+acaba de guardar.
 
 ```
 Agrupador ──JSON──> Agente-BBDD ──> notes · tools · commands · cves
                                     mitre_techniques · graph_entities
                                     entity_relations
+                                        │
+                                        ▼ (tras el commit)
+                                    Obsi (sincroniza el vault)
 ```
+
+**Nota (2026-09-28):** esta llamada a Obsi es nueva — antes era el Agrupador quien
+entregaba en paralelo a Agente-BBDD y a Obsi; el pipeline se rediseñó para que Obsi
+corra después de este agente, releyendo de SQLite ya confirmado. Ver
+`Editor/Obsi/DECISIONES_OBSI.md`.
 
 No tiene `prompt.md`: **no consulta a ningún modelo**. Todo lo que hace es determinista
 —mapear campos, buscar duplicados y escribir—, así que la misma entrada produce siempre
@@ -42,16 +52,36 @@ cuelgan de su `note_id` por clave foránea. Las entidades van después, y las re
   "guardado": true,
   "nota_id": 1,
   "herramientas": 2,
+  "herramientas_ids": [5, 6],
   "comandos": 1,
+  "comandos_ids": [12],
   "cves": 1,
+  "cves_ids": ["CVE-2021-44228"],
   "mitre": 1,
+  "mitre_ids": ["T1059"],
   "entidades": 3,
-  "relaciones": 2
+  "relaciones": 2,
+  "obsi_entregado": true
 }
 ```
 
 Los números son elementos **procesados**, no necesariamente nuevos: en un reintento valen
 lo mismo aunque no se haya creado ninguna fila.
+
+**Los `*_ids` (2026-09-28)** acompañan a cada recuento y son la identidad real de la fila
+en cada tabla, no un correlativo interno: `herramientas_ids`/`comandos_ids` son el `id`
+numérico de `tools`/`commands`, mientras que `cves_ids`/`mitre_ids` son `cve_id`/
+`technique_id` (así es como el vault de Obsidian identifica a un CVE o una técnica MITRE,
+ver `migrate_to_obsidian.py` en el repo de la app — un CVE o técnica no tiene una nota por
+fila, sino una por identificador único). Existen para que el agente **Obsi**, que corre
+después de este, sepa exactamente qué releer de la base sin tener que recalcular
+relaciones él solo. Ver `Editor/Obsi/DECISIONES_OBSI.md`.
+
+**`obsi_entregado` (2026-09-28)** se manda siempre en `false` si `OBSI_URL` no responde,
+pero **nunca hace fallar la petición** ni deshace la transacción: a diferencia de un fallo
+al guardar, aquí la BBDD ya quedó bien escrita — es un fallo "blando", solo de Obsi (ver
+`Editor/Obsi/DECISIONES_OBSI.md` §7). Obsi expone su propio endpoint para poder
+reintentarse solo, sin repetir toda la cadena.
 
 ## Reglas
 
@@ -142,6 +172,7 @@ interruptores de comportamiento:
 | Variable | Uso |
 |---|---|
 | `DATABASE_URL` | La hereda de la app. Por defecto `sqlite:///data/cyberkb.db`. |
+| `OBSI_URL` | Endpoint del agente Obsi. Por defecto el de `config.json`. |
 
 ## Integración en la app
 

@@ -1,7 +1,7 @@
 {
   "clasificador": {
-    "modelo": "claude-opus-5",
-    "modelo_respaldo": "claude-opus-4-8",
+    "modelo": "claude-haiku-4-5",
+    "modelo_respaldo": null,
     "max_tokens": 2000,
     "effort": "low",
     "certeza_minima_para_descartar": 0.8

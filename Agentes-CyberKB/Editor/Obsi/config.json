@@ -1,0 +1,9 @@
+{
+  "vault": {
+    "directorio_por_defecto": "vault"
+  },
+
+  "errores": {
+    "generico": "El grafo no ha podido actualizarse"
+  }
+}
