@@ -169,6 +169,13 @@ Requiere una decisión de UI de qué botón dispara cuál.
 comportamiento de la app para el usuario final. Lo dejo listo para que se decida
 cuando se aborde la construcción real.
 
+**Decisión (2026-09-28): Opción 2 — Migración.** El usuario quiere que todo pase por
+los agentes, nada se queda en el camino anterior. `/api/upload`/`/api/analyze` deben
+dejar de llamar a `ai.analyze_content()` y pasar a usar la cadena
+Escritor→Agrupador→Agente-BBDD→Obsi (vía `POST /api/escritor/resumen`, que ya acepta
+el mismo tipo de subida de fichero). Sin camino paralelo, sin Opción 1 ni 3. Pendiente
+de construir — el usuario pidió pausar aquí antes de tocar código.
+
 ---
 
 ## PARTE 3 — Plan de frontend: extender la pestaña `✎ EDITOR` existente
@@ -256,8 +263,9 @@ activa solo desde la pestaña Editor completa, no desde el atajo rápido.
       endpoints responden (`/api/cinefilo/transcribir`, `/api/escritor/resumen-agente`,
       `/api/agrupador/agrupar`, `/api/bbdd/ingesta`, `/api/obsi/sync`), sin tocar
       datos reales en la prueba.
-- [ ] Decidir Parte 2.4 (convivencia / migración / híbrida) antes de tocar
-      `/api/upload` o `/api/analyze`
+- [x] Decidir Parte 2.4 (convivencia / migración / híbrida) — **decidido
+      (2026-09-28): Opción 2, Migración.** Ver el detalle en la Parte 2.4. Falta
+      construirlo: `/api/upload`/`/api/analyze` migrar a `POST /api/escritor/resumen`.
 
 ---
 
