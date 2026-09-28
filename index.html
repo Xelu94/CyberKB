@@ -715,7 +715,7 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
       </div>
       <div class="osint-main">
         <div class="osint-query-bar">
-          <input type="text" id="osintQuery" placeholder="" autocomplete="off" onkeydown="if(e&&e.key==='Enter')runOsint()">
+          <input type="text" id="osintQuery" placeholder="" autocomplete="off" onkeydown="if(event.key==='Enter')runOsint()">
           <button class="btn-ai" onclick="runOsint()" id="btnOsint">▶ Ejecutar</button>
           <button class="btn-outline" onclick="clearOsintResult()">✕</button>
         </div>
