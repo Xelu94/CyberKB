@@ -349,6 +349,28 @@ app.add_middleware(
 )
 
 
+# ─── Agentes (Agentes-CyberKB/Editor) ──────────────────────────────────────────
+# La carpeta anidada dentro de este mismo repo (no la copia hermana suelta que
+# documentaban los README de los agentes): asi funciona con solo clonar este
+# repo, sin depender de que exista una carpeta hermana en la maquina de quien
+# lo clone.
+_AGENTES_DIR = RUNTIME_DIR / "Agentes-CyberKB" / "Editor"
+for _carpeta in ("Cinefilo", "Escritor", "Agrupador", "Agente-BBDD", "Obsi"):
+    sys.path.insert(0, str(_AGENTES_DIR / _carpeta))
+
+from cinefilo import router as cinefilo_router
+from escritor import router as escritor_router
+from agrupador import router as agrupador_router
+from agente_bbdd import router as bbdd_router
+from obsi import router as obsi_router
+
+app.include_router(cinefilo_router)
+app.include_router(escritor_router)
+app.include_router(agrupador_router)
+app.include_router(bbdd_router)
+app.include_router(obsi_router)
+
+
 # ─── Serve Frontend ────────────────────────────────────────────────────────────
 
 @app.get("/", response_class=FileResponse)

@@ -469,6 +469,14 @@ def _ejecutar(url: str, titulo: str | None) -> dict:
 
 
 @router.post("/transcribir")
-async def transcribir(peticion: PeticionVideo):
-    """Entrada de la app: el usuario pega la URL de un video."""
+def transcribir(peticion: PeticionVideo):
+    """Entrada de la app: el usuario pega la URL de un video.
+
+    Sincrono a proposito: el cuerpo hace trabajo bloqueante (yt-dlp, ffmpeg,
+    llamadas de red sincronas) e incluye una llamada HTTP de vuelta a este
+    mismo servidor (Escritor). Como `def` normal, Starlette lo ejecuta en un
+    threadpool y libera el event loop para atender esa llamada; declarado
+    `async def` sin awaits, bloquea el loop entero y esa llamada nunca se
+    atiende hasta agotar el timeout (verificado con un video real, 2026-09-28).
+    """
     return _procesar(peticion.url, peticion.titulo)

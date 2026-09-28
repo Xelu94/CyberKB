@@ -346,6 +346,10 @@ def _procesar(resumen: ResumenEscritor) -> dict:
 
 
 @router.post("/agrupar")
-async def agrupar(resumen: ResumenEscritor):
-    """Entrada del Escritor: el resumen ya validado como ciberseguridad."""
+def agrupar(resumen: ResumenEscritor):
+    """Entrada del Escritor: el resumen ya validado como ciberseguridad.
+
+    Sincrono: llama de vuelta a Agente-BBDD en este mismo servidor. Ver la
+    nota en `cinefilo.transcribir` sobre por que no puede ser `async def`.
+    """
     return _procesar(resumen)

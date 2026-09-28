@@ -74,9 +74,9 @@ pie la regla de no tocar `main.py` hasta que el usuario lo pida explícitamente.
 | `yt-dlp`, `openai`, `reportlab` | **En `requirements.txt` pero NO instalados** en el `.venv` de la app — ni con `python` del sistema ni con el venv. Hay que correr `pip install -r requirements.txt` de verdad. |
 | `ffmpeg` en PATH | **No está instalado** — bloquea la ruta de transcripción por audio de Cinéfilo (la ruta de subtítulos oficiales sí funcionaría sin él) |
 | `.env` de la app | Tiene `ANTHROPIC_API_KEY` y `AGRUPADOR_URL`. **Falta `ESCRITOR_URL`**, que Cinéfilo necesita para entregarle el texto a Escritor. `OBSIDIAN_VAULT_DIR` ya tiene convención fijada (ver fila siguiente), pero sigue sin ponerse en el `.env` de la app hasta que se construya Obsi. |
-| Agente Obsi | No construido — carpeta vacía. **Rediseñado (2026-09-28)**: ya no escribe la nota directamente desde los datos de la pipeline; ahora corre **después** de que Agente-BBDD confirme en SQLite, relee de ahí (así hereda los `id` definitivos y las relaciones) y hace una sincronización **dirigida** (crea/actualiza solo las notas afectadas por esa pasada, y borra las que queden huérfanas/duplicadas por cambio de título — busca la nota existente por el `id` del frontmatter, no por nombre de fichero). Ya no es un paso en paralelo con Agente-BBDD, es el siguiente eslabón de la cadena. Ver `project_investigacion_obsidian_ia` en memoria y `Editor/Obsi/investigacion-conexion.md`. |
+| Agente Obsi | **Construido (2026-09-28)** — `obsi.py` + `vault_lib.py` existen, probados contra la BBDD real (BBDD/vault de scratch, nunca los reales) con simulacros end-to-end incluyendo fallos en cada eslabón. Sigue **sin enganchar a `main.py`** (por norma del repo). Corre **después** de que Agente-BBDD confirme en SQLite, relee de ahí (así hereda los `id` definitivos y las relaciones) y hace una sincronización **dirigida** (crea/actualiza solo las notas afectadas por esa pasada, y borra las que queden huérfanas/duplicadas por cambio de título — busca la nota existente por el `id` del frontmatter, no por nombre de fichero). No es un paso en paralelo con Agente-BBDD, es el siguiente eslabón de la cadena. Usa su propio mensaje de error, `"El grafo no ha podido actualizarse"`, distinto del genérico del resto de agentes — ver Parte 3.1 punto 4 más abajo. Ver `project_investigacion_obsidian_ia` en memoria y `Editor/Obsi/DECISIONES_OBSI.md`. |
 | "Agente 4" (Indexer, descartado) | Carpeta `Agente4-IndexerO` eliminada (2026-09-26) — no hacía falta si solo entra información por la pipeline; la búsqueda semántica se construye sobre SQLite, no sobre el vault (ver `project_investigacion_obsidian_ia` en memoria). **Nota**: el nombre "Agente 4" no se reutiliza para el rediseño de Obsi — es un concepto distinto, sin relación con este descartado. |
-| Vault de Obsidian ya poblado | El 2026-09-28 apareció en el repo (commit ajeno, de **jcuarterosaez**) `scripts/migrate_to_obsidian.py` + un `vault/` de 561 notas ya generado — un volcado puntual de toda la BBDD, no conectado en vivo. Fija de facto las convenciones que Obsi debe seguir: `OBSIDIAN_VAULT_DIR` → por defecto `<raíz del repo>/vault`; frontmatter `id`/`tipo`/`fecha_actualizacion`; carpetas `Notas/Comandos/CVEs/Herramientas/Tecnicas-MITRE`; nombres de fichero saneados y únicos por tipo. Ver `Editor/Obsi/investigacion-conexion.md`. |
+| Vault de Obsidian | El 2026-09-28 apareció en el repo (commit ajeno, de **jcuarterosaez**) `scripts/migrate_to_obsidian.py` — un volcado puntual de toda la BBDD, no conectado en vivo. Fijó de facto las convenciones que Obsi sigue: `OBSIDIAN_VAULT_DIR` → por defecto `<raíz del repo>/vault`; frontmatter `id`/`tipo`/`fecha_actualizacion`; carpetas `Notas/Comandos/CVEs/Herramientas/Tecnicas-MITRE`; nombres de fichero saneados y únicos por tipo. El script se reescribió después para compartir esa lógica con Obsi vía `Editor/Obsi/vault_lib.py` (verificado que conviven sin duplicar). Las 561 notas generadas de ejemplo se vaciaron ese mismo día (commit `f954092`) para no exponer datos reales en el repo público — el vault vive vacío en `/vault` hasta que algo lo rellene. Ver `Editor/Obsi/DECISIONES_OBSI.md`. |
 
 ### 2.2 — Cómo se registrarían los routers (cuando se decida hacerlo)
 
@@ -89,11 +89,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "Agentes-CyberKB" / "Editor" / "Cinefilo"))
 from cinefilo import router as cinefilo_router
 app.include_router(cinefilo_router)
-# ... repetir para Escritor, Agrupador, Agente-BBDD, (Obsi cuando exista)
+# ... repetir para Escritor, Agrupador, Agente-BBDD, Obsi
 ```
 
 Prefijos ya fijados y sin colisión con los 57 endpoints actuales de `main.py`:
-`/api/cinefilo`, `/api/escritor`, `/api/agrupador`, `/api/bbdd`, (futuro `/api/obsi`).
+`/api/cinefilo`, `/api/escritor`, `/api/agrupador`, `/api/bbdd`, `/api/obsi`.
 
 ### 2.3 — La cadena es SÍNCRONA de punta a punta — implicación real de rendimiento
 
@@ -198,17 +198,29 @@ que inventar una pestaña nueva.
    tags, tools, CVEs, comandos) — el Agrupador devuelve exactamente ese tipo de datos,
    así que la tarjeta `ai-card` que ya existe sirve tal cual, sin rediseñar nada.
    Añadir dos chips nuevos de estado, calcados de los `*_entregado` que cada agente ya
-   devuelve: `✓ Guardado en BBDD` / `✗ No guardado en BBDD` y lo mismo para Obsidian
-   (cuando Obsi exista) — igual que `agrupador_entregado`/`escritor_entregado` ya
-   viajan en las respuestas de Escritor/Cinéfilo.
+   devuelve: `✓ Guardado en BBDD` / `✗ No guardado en BBDD` (de `bbdd_entregado`, que
+   ahora lo entrega Agente-BBDD, no Agrupador) y `✓ Sincronizado con Obsidian` /
+   `✗ No sincronizado con Obsidian` (de `obsi_entregado`) — igual que
+   `agrupador_entregado`/`escritor_entregado` ya viajan en las respuestas de
+   Escritor/Cinéfilo.
 
-4. **Errores y reintento.** Cualquier fallo en cualquier tramo de la cadena responde
-   con el texto exacto `"Ha habido un error"` (convención ya fijada desde el diseño
-   original de Agrupador/Agente-BBDD). El frontend debe mostrarlo igual que ya muestra
-   `hideGlobalProgress(msg,'error')` en el resto de la app, con un botón "↺ Reintentar"
-   que repite la misma petición — no hace falta guardar estado de en qué paso se quedó,
-   porque toda la cadena se repite entera en cada intento (así está diseñado el
-   backend: es todo o nada por transacción).
+4. **Errores y reintento — dos mecanismos distintos, no uno solo.**
+   - **Cinéfilo/Escritor/Agrupador/Agente-BBDD**: cualquier fallo responde con el
+     texto exacto `"Ha habido un error"` (convención ya fijada). El frontend lo
+     muestra igual que ya hace `hideGlobalProgress(msg,'error')`, con un botón
+     "↺ Reintentar" que **repite la cadena entera** desde Cinéfilo — no hace falta
+     guardar en qué paso se quedó, porque es todo o nada por transacción hasta ese
+     punto.
+   - **Obsi es distinto (construido 2026-09-28, ver `Editor/Obsi/DECISIONES_OBSI.md`
+     §7)**: cuando falla, la BBDD **ya está guardada** por los cuatro agentes
+     anteriores, así que repetir la cadena entera pagaría otra vez las llamadas a
+     Claude por un problema que no es suyo. Su mensaje de error es propio,
+     `"El grafo no ha podido actualizarse"` (no el genérico), y tiene su **propio
+     endpoint** (`POST /api/obsi/sync`) para poder reintentarse aislado: el chip
+     `✗ No sincronizado con Obsidian` necesita su propio botón "Reintentar" que
+     llame solo a ese endpoint con los ids que ya vinieron en la respuesta original
+     (`nota_id`/`herramientas_ids`/`comandos_ids`/`cves_ids`/`mitre_ids`) — sin
+     repetir Cinéfilo/Escritor/Agrupador/Agente-BBDD.
 
 ### 3.2 — El modal rápido de "⊕ Subir doc" — depende de la decisión de la Parte 2.4
 
@@ -228,19 +240,24 @@ activa solo desde la pestaña Editor completa, no desde el atajo rápido.
       verificado en PATH (2026-09-26)
 - [x] Añadir `ESCRITOR_URL` al `.env` de la app — hecho, y también `AGRUPADOR_URL`
       (no estaba en esta lista pero también hace falta y ya está puesto)
-- [ ] Construir el agente Obsi — sigue pendiente, con su propia investigación ya
-      guardada en `Editor/Obsi/investigacion-conexion.md` (ver memoria del proyecto).
-      `OBSIDIAN_VAULT_DIR` y el campo de fecha del frontmatter ya no son un pendiente
-      (los fijó de facto `scripts/migrate_to_obsidian.py`, 2026-09-28). Lo que sigue
-      sin cerrar, antes de construirlo entero, es el rediseño del 2026-09-28: formato
-      de la llamada interna Agente-BBDD → Obsi, qué pasa si Obsi falla tras haber
-      confirmado ya en SQLite, y la relación entre el script de volcado completo y la
-      sincronización incremental de Obsi una vez esté en producción (ver "Rediseño"
-      en `investigacion-conexion.md`)
+- [x] Construir el agente Obsi — **hecho (2026-09-28)**. `obsi.py`/`vault_lib.py`
+      construidos y probados con simulacros reales (BBDD/vault de scratch,
+      camino feliz, idempotencia, fallo en cada eslabón de la cadena, y
+      reconciliación con `migrate_to_obsidian.py`). Todo lo que quedaba abierto del
+      rediseño ya se cerró: formato de la llamada Agente-BBDD → Obsi (ids por tipo,
+      ver `DECISIONES_OBSI.md` §2), fallo blando + reintento aislado (§7), y
+      convivencia con el volcado completo compartiendo `vault_lib.py` (§8, Opción C).
+- [x] Enganchar los 5 agentes a `main.py` — **hecho (2026-09-28), a petición
+      explícita del usuario**. Los 5 `include_router` se registran de una sola vez,
+      justo después de crear `app` y añadir el CORS middleware. Apuntan a la copia
+      **anidada** de `Agentes-CyberKB/Editor/` (dentro de este mismo repo), no a la
+      copia hermana suelta que documentaban los README de los agentes — así
+      funciona con solo clonar este repo. Verificado con `TestClient` que los 5
+      endpoints responden (`/api/cinefilo/transcribir`, `/api/escritor/resumen-agente`,
+      `/api/agrupador/agrupar`, `/api/bbdd/ingesta`, `/api/obsi/sync`), sin tocar
+      datos reales en la prueba.
 - [ ] Decidir Parte 2.4 (convivencia / migración / híbrida) antes de tocar
       `/api/upload` o `/api/analyze`
-- [ ] Decidir si se registra todo de una vez en `main.py` o por agente, según vaya
-      quedando listo cada uno
 
 ---
 

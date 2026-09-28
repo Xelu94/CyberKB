@@ -85,6 +85,16 @@ def _texto(valor, limite: int | None = None) -> str:
     return limpio[:limite] if limite else limpio
 
 
+def _usos_json(valor) -> str | None:
+    """`Tool.use_cases` se lee en main.py como `json.loads(...)` (lista de
+    strings, ver ToolCreate/_tool_dict): Agrupador solo entrega una frase, asi
+    que se envuelve en una lista de un elemento en vez de guardar texto plano,
+    que rompia esa lectura con un JSONDecodeError (visto en un simulacro real,
+    2026-09-28)."""
+    texto = _texto(valor)
+    return json.dumps([texto], ensure_ascii=False) if texto else None
+
+
 def _fusionar(fila, campo: str, valor) -> None:
     """Escribe el valor nuevo sobre la fila existente.
 
@@ -172,7 +182,7 @@ def _herramientas(db: Session, nota: Note, datos: Agrupacion) -> list[int]:
                 url=url,
                 description=_texto(bruto.get("description")) or None,
                 tool_type=tipo,
-                use_cases=_texto(bruto.get("use_cases")) or None,
+                use_cases=_usos_json(bruto.get("use_cases")),
                 requires_api=bool(bruto.get("requires_api")),
                 category=_texto(datos.category, LONGITUDES["tool_category"]) or None,
                 mention_count=1,
@@ -183,7 +193,7 @@ def _herramientas(db: Session, nota: Note, datos: Agrupacion) -> list[int]:
             # no debe borrar la que ya hubiera.
             _fusionar(fila, "url", url)
             _fusionar(fila, "description", _texto(bruto.get("description")))
-            _fusionar(fila, "use_cases", _texto(bruto.get("use_cases")))
+            _fusionar(fila, "use_cases", _usos_json(bruto.get("use_cases")))
             if bruto.get("requires_api"):
                 fila.requires_api = True
             if INCREMENTAR:
@@ -487,6 +497,10 @@ def _procesar(datos: Agrupacion) -> dict:
 
 
 @router.post("/ingesta")
-async def ingesta(datos: Agrupacion):
-    """Entrada del Agrupador: la agrupacion lista para repartir entre tablas."""
+def ingesta(datos: Agrupacion):
+    """Entrada del Agrupador: la agrupacion lista para repartir entre tablas.
+
+    Sincrono: llama de vuelta a Obsi en este mismo servidor. Ver la nota en
+    `cinefilo.transcribir` sobre por que no puede ser `async def`.
+    """
     return _procesar(datos)
