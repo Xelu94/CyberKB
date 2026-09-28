@@ -9,7 +9,7 @@
   "limites": {
     "min_caracteres_entrada": 4000,
     "extensiones": [".pdf", ".odt", ".txt", ".md", ".log"],
-    "timeout_agrupador_segundos": 30
+    "timeout_agrupador_segundos": 120
   },
 
   "mensajes": {
