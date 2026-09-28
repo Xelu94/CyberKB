@@ -73,9 +73,10 @@ pie la regla de no tocar `main.py` hasta que el usuario lo pida explícitamente.
 | Routers registrados en `main.py` | **Cero** `include_router` — confirmado de nuevo |
 | `yt-dlp`, `openai`, `reportlab` | **En `requirements.txt` pero NO instalados** en el `.venv` de la app — ni con `python` del sistema ni con el venv. Hay que correr `pip install -r requirements.txt` de verdad. |
 | `ffmpeg` en PATH | **No está instalado** — bloquea la ruta de transcripción por audio de Cinéfilo (la ruta de subtítulos oficiales sí funcionaría sin él) |
-| `.env` de la app | Tiene `ANTHROPIC_API_KEY` y `AGRUPADOR_URL`. **Falta `ESCRITOR_URL`**, que Cinéfilo necesita para entregarle el texto a Escritor. **Falta `OBSIDIAN_VAULT_DIR`** (agente Obsi, aún sin construir). |
-| Agente Obsi (3b) | No construido — carpeta vacía |
-| "Agente 4" (Indexer, descartado) | Carpeta `Agente4-IndexerO` eliminada (2026-09-26) — no hacía falta si solo entra información por la pipeline; la búsqueda semántica se construye sobre SQLite, no sobre el vault (ver `project_investigacion_obsidian_ia` en memoria) |
+| `.env` de la app | Tiene `ANTHROPIC_API_KEY` y `AGRUPADOR_URL`. **Falta `ESCRITOR_URL`**, que Cinéfilo necesita para entregarle el texto a Escritor. `OBSIDIAN_VAULT_DIR` ya tiene convención fijada (ver fila siguiente), pero sigue sin ponerse en el `.env` de la app hasta que se construya Obsi. |
+| Agente Obsi | No construido — carpeta vacía. **Rediseñado (2026-09-28)**: ya no escribe la nota directamente desde los datos de la pipeline; ahora corre **después** de que Agente-BBDD confirme en SQLite, relee de ahí (así hereda los `id` definitivos y las relaciones) y hace una sincronización **dirigida** (crea/actualiza solo las notas afectadas por esa pasada, y borra las que queden huérfanas/duplicadas por cambio de título — busca la nota existente por el `id` del frontmatter, no por nombre de fichero). Ya no es un paso en paralelo con Agente-BBDD, es el siguiente eslabón de la cadena. Ver `project_investigacion_obsidian_ia` en memoria y `Editor/Obsi/investigacion-conexion.md`. |
+| "Agente 4" (Indexer, descartado) | Carpeta `Agente4-IndexerO` eliminada (2026-09-26) — no hacía falta si solo entra información por la pipeline; la búsqueda semántica se construye sobre SQLite, no sobre el vault (ver `project_investigacion_obsidian_ia` en memoria). **Nota**: el nombre "Agente 4" no se reutiliza para el rediseño de Obsi — es un concepto distinto, sin relación con este descartado. |
+| Vault de Obsidian ya poblado | El 2026-09-28 apareció en el repo (commit ajeno, de **jcuarterosaez**) `scripts/migrate_to_obsidian.py` + un `vault/` de 561 notas ya generado — un volcado puntual de toda la BBDD, no conectado en vivo. Fija de facto las convenciones que Obsi debe seguir: `OBSIDIAN_VAULT_DIR` → por defecto `<raíz del repo>/vault`; frontmatter `id`/`tipo`/`fecha_actualizacion`; carpetas `Notas/Comandos/CVEs/Herramientas/Tecnicas-MITRE`; nombres de fichero saneados y únicos por tipo. Ver `Editor/Obsi/investigacion-conexion.md`. |
 
 ### 2.2 — Cómo se registrarían los routers (cuando se decida hacerlo)
 
@@ -98,8 +99,10 @@ Prefijos ya fijados y sin colisión con los 57 endpoints actuales de `main.py`:
 
 Esto es importante y no estaba analizado hasta ahora: cuando el frontend llama a
 `POST /api/cinefilo/transcribir`, esa petición **no vuelve** hasta que, dentro de la
-misma llamada, Cinéfilo ha llamado a Escritor, Escritor ha llamado al Agrupador, y el
-Agrupador ha llamado (en paralelo) a Agente-BBDD y a Obsi. Es decir:
+misma llamada, Cinéfilo ha llamado a Escritor, Escritor ha llamado al Agrupador, el
+Agrupador ha llamado a Agente-BBDD, y **Agente-BBDD ha llamado a Obsi** (rediseño
+2026-09-28: Obsi ya no corre en paralelo con Agente-BBDD, corre justo después, porque
+necesita leer de SQLite ya confirmado). Es decir:
 
 ```
 Frontend ──POST /api/cinefilo/transcribir──▶ Cinéfilo
@@ -110,14 +113,19 @@ Frontend ──POST /api/cinefilo/transcribir──▶ Cinéfilo
                                                 ▼
                                              Agrupador (POST interno)
                                                 │  (2ª llamada a Claude — extracción)
-                                                ├──▶ Agente-BBDD (POST interno)
-                                                └──▶ Obsi (POST interno, en paralelo con BBDD)
+                                                ▼
+                                             Agente-BBDD (POST interno, confirma en SQLite)
+                                                ▼
+                                             Obsi (POST interno, relee de SQLite y
+                                                    sincroniza solo lo afectado en el vault)
                                                 ▼
 Frontend ◀────────── una sola respuesta HTTP, con todos los *_entregado anidados ─────
 ```
 
 Un vídeo largo puede tardar **varios minutos** en esa única petición (descarga +
-transcripción de audio + 2 llamadas a Claude + 2 escrituras). Esto obliga a:
+transcripción de audio + 2 llamadas a Claude + 2 escrituras, ahora secuenciales en vez
+de en paralelo — un poco más lento que el diseño anterior, pero necesario para que Obsi
+pueda apoyarse en los `id` ya confirmados). Esto obliga a:
 
 - Timeouts generosos en cada tramo de la cadena (`config.json` de cada agente ya tiene
   los suyos — hay que revisar que sean coherentes entre sí, el de arriba siempre mayor
@@ -182,16 +190,16 @@ que inventar una pestaña nueva.
    construido para el Modo Forense (`#forensicPipeline`, con iconos `⟳/✓/·/✕` por
    paso, flechas `→` entre etapas, y una barra de progreso indeterminada). Es el
    molde perfecto a reutilizar: `Transcribir (1a) → Resumir (1b) → Extraer (2) →
-   Guardar (3a + 3b)`, con la única particularidad de que 3a y 3b son la misma etapa
-   visual en paralelo, no secuencial (por ejemplo, dos iconos lado a lado en el mismo
-   paso: "🗄 BBDD" y "🗒 Obsidian").
+   Guardar en BBDD (3) → Sincronizar Obsidian (Obsi)`. **Rediseño 2026-09-28**: ya
+   no son la misma etapa visual en paralelo — Obsi corre después de que 3 confirme
+   en SQLite, así que son dos pasos secuenciales, no dos iconos lado a lado.
 
 3. **Resultado final.** Reutilizar `showAIResult()` (ya renderiza categoría, resumen,
    tags, tools, CVEs, comandos) — el Agrupador devuelve exactamente ese tipo de datos,
    así que la tarjeta `ai-card` que ya existe sirve tal cual, sin rediseñar nada.
    Añadir dos chips nuevos de estado, calcados de los `*_entregado` que cada agente ya
    devuelve: `✓ Guardado en BBDD` / `✗ No guardado en BBDD` y lo mismo para Obsidian
-   (cuando 3b exista) — igual que `agrupador_entregado`/`escritor_entregado` ya
+   (cuando Obsi exista) — igual que `agrupador_entregado`/`escritor_entregado` ya
    viajan en las respuestas de Escritor/Cinéfilo.
 
 4. **Errores y reintento.** Cualquier fallo en cualquier tramo de la cadena responde
@@ -214,13 +222,21 @@ activa solo desde la pestaña Editor completa, no desde el atajo rápido.
 
 ## PARTE 4 — Checklist de lo que hay que resolver antes de construir nada de esto
 
-- [ ] Ejecutar `pip install -r requirements.txt` de verdad en el `.venv` de la app
-      (hoy `yt-dlp`, `openai`, `reportlab` no están instalados pese a estar listados)
-- [ ] Instalar `ffmpeg` en el sistema (`winget install Gyan.FFmpeg`) — si no, Cinéfilo
-      solo funciona con vídeos que ya traen subtítulos oficiales
-- [ ] Añadir `ESCRITOR_URL` al `.env` de la app
-- [ ] Construir el agente Obsi (3b) — sigue pendiente, con su propia investigación ya
-      guardada en `Editor/Obsi/investigacion-conexion.md` (ver memoria del proyecto)
+- [x] Ejecutar `pip install -r requirements.txt` de verdad en el `.venv` de la app —
+      hecho, `yt-dlp`/`openai`/`reportlab` verificados instalados (2026-09-26)
+- [x] Instalar `ffmpeg` en el sistema (`winget install Gyan.FFmpeg`) — hecho,
+      verificado en PATH (2026-09-26)
+- [x] Añadir `ESCRITOR_URL` al `.env` de la app — hecho, y también `AGRUPADOR_URL`
+      (no estaba en esta lista pero también hace falta y ya está puesto)
+- [ ] Construir el agente Obsi — sigue pendiente, con su propia investigación ya
+      guardada en `Editor/Obsi/investigacion-conexion.md` (ver memoria del proyecto).
+      `OBSIDIAN_VAULT_DIR` y el campo de fecha del frontmatter ya no son un pendiente
+      (los fijó de facto `scripts/migrate_to_obsidian.py`, 2026-09-28). Lo que sigue
+      sin cerrar, antes de construirlo entero, es el rediseño del 2026-09-28: formato
+      de la llamada interna Agente-BBDD → Obsi, qué pasa si Obsi falla tras haber
+      confirmado ya en SQLite, y la relación entre el script de volcado completo y la
+      sincronización incremental de Obsi una vez esté en producción (ver "Rediseño"
+      en `investigacion-conexion.md`)
 - [ ] Decidir Parte 2.4 (convivencia / migración / híbrida) antes de tocar
       `/api/upload` o `/api/analyze`
 - [ ] Decidir si se registra todo de una vez en `main.py` o por agente, según vaya
