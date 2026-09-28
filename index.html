@@ -283,6 +283,9 @@ tr.svc-open-row td{background:rgba(0,170,255,.08);}
 .svc-whatis{font-size:12px;color:var(--text2);line-height:1.55;margin-bottom:12px;background:var(--bg3);border-left:2px solid var(--cyan);border-radius:var(--r);padding:7px 10px;}
 .svc-lbl{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);margin:10px 0 6px;}
 .enum-note{background:rgba(255,204,0,.06);border:1px solid rgba(255,204,0,.25);border-radius:var(--r);padding:7px 10px;font-size:11px;color:var(--yellow);margin-top:4px;}
+/* Nota informativa (azul) — para explicaciones/metodología, no avisos */
+.enum-note-info{background:rgba(0,170,255,.06);border:1px solid rgba(0,170,255,.28);border-radius:var(--r);padding:7px 10px;font-size:11px;color:var(--text2);margin-top:4px;}
+.enum-note-info b{color:var(--blue);}
 .enum-danger-note{background:rgba(255,51,68,.06);border:1px solid rgba(255,51,68,.25);border-radius:var(--r);padding:7px 10px;font-size:11px;color:var(--red);margin-top:4px;}
 .enum-nmap-section{margin-bottom:20px;}
 .enum-nmap-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
@@ -293,7 +296,7 @@ tr.svc-open-row td{background:rgba(0,170,255,.08);}
 .enum-toggle{display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;font-family:var(--mono);color:var(--text2);background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:4px 9px;user-select:none;transition:all .12s;}
 .enum-toggle.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,221,255,.07);}
 .enum-phase-cmd{margin-bottom:10px;}
-.enum-phase-lbl{font-size:9px;font-family:var(--mono);font-weight:700;letter-spacing:1px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;}
+.enum-phase-lbl{font-size:11px;font-family:var(--mono);font-weight:700;letter-spacing:.5px;color:var(--cyan);margin-bottom:6px;text-transform:uppercase;border-left:3px solid var(--cyan);padding-left:8px;}
 .enum-service-table{width:100%;border-collapse:collapse;font-size:11px;font-family:var(--mono);}
 .enum-service-table th{background:var(--bg3);color:var(--text3);padding:6px 10px;text-align:left;font-size:10px;border-bottom:1px solid var(--border);}
 .enum-service-table td{padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text2);}
@@ -948,6 +951,7 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
           <div class="enum-gen-row">
             <span class="enum-gen-label">Flags fase 1</span>
             <div class="enum-toggle-row" style="margin:0;">
+              <label class="enum-toggle" id="tgl-p" onclick="toggleEnumFlag('p')" title="Escanea los 65535 puertos (sin él, solo los 1000 más comunes)">-p-</label>
               <label class="enum-toggle" id="tgl-pn" onclick="toggleEnumFlag('pn')">-Pn</label>
               <label class="enum-toggle" id="tgl-v" onclick="toggleEnumFlag('v')">-v</label>
             </div>
@@ -959,7 +963,7 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
               <button class="enum-copy-btn" onclick="enumCopy(this,document.getElementById('nmapCmd1').textContent)">⎘ Copiar</button>
             </div>
           </div>
-          <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px;">
+          <div style="border-top:1px solid var(--border2);padding-top:16px;margin-top:18px;">
             <div class="enum-gen-row">
               <span class="enum-gen-label">Puertos abiertos</span>
               <input type="text" class="enum-gen-input" id="nmapPorts" placeholder="21,22,80,443..." oninput="onNmapPortsChanged()">
@@ -5258,33 +5262,33 @@ function renderSqliGen(){
 
   let body='';
   if(_sqliPhase===1){
-    body=`<div class="enum-note" style="margin-bottom:8px;">Confirma que hay inyección. Según cómo reaccione ya intuyes el tipo: <b>error SQL</b> → error-based · <b>ves la salida</b> de la query → UNION · <b>respuesta distinta</b> verdadero/falso (sin ver datos) → blind booleano · <b>retardo</b> con el sleep → blind por tiempo.</div>`
+    body=`<div class="enum-note-info" style="margin-bottom:8px;">Confirma que hay inyección. Según cómo reaccione ya intuyes el tipo: <b>error SQL</b> → error-based · <b>ves la salida</b> de la query → UNION · <b>respuesta distinta</b> verdadero/falso (sin ver datos) → blind booleano · <b>retardo</b> con el sleep → blind por tiempo.</div>`
       + _sqliCards(dbms,'detect')
       + wvPayloadCard(SQLI_DB[dbms].timeInj,'Con retardo confirmas la SQLi Y, de paso, que es blind por tiempo')
       + _sqliNav(2,'Elegir el tipo →');
   } else if(_sqliPhase===2){
-    body=`<div class="enum-note" style="margin-bottom:8px;">¿Cómo te vuelve el dato? Elige el tipo y el flujo se adapta. <b>UNION</b> y <b>error-based</b> son in-band; <b>booleano</b> y <b>tiempo</b> son blind.</div>`
+    body=`<div class="enum-note-info" style="margin-bottom:8px;">¿Cómo te vuelve el dato? Elige el tipo y el flujo se adapta. <b>UNION</b> y <b>error-based</b> son in-band; <b>booleano</b> y <b>tiempo</b> son blind.</div>`
       + Object.entries(SQLI_TYPES).map(([id,t])=>`<button onclick="setSqliType('${id}')" style="display:block;width:100%;text-align:left;margin-bottom:6px;padding:9px 12px;border-radius:6px;border:1px solid ${_sqliType===id?'var(--cyan)':'var(--border2)'};background:var(--bg3);color:var(--text);cursor:pointer;">
         <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--cyan);">${t.label}</span>
         <span style="font-size:9px;color:var(--text3);border:1px solid var(--border);border-radius:8px;padding:1px 6px;margin-left:6px;">${t.tag}</span>
         <div style="font-size:11px;color:var(--text3);margin-top:2px;">${t.hint}</div></button>`).join('');
   } else if(_sqliPhase===3){
     body=_sqliType==='union'
-      ? `<div class="enum-note" style="margin-bottom:8px;">Averigua cuántas columnas devuelve la query (para que el UNION cuadre) y cuáles se ven en la página.</div>`+_sqliCards(dbms,'union')+_sqliNav(4,'Explotar →')
-      : `<div class="enum-note">El nº de columnas solo hace falta para UNION. Con «${SQLI_TYPES[_sqliType]?.label||'este tipo'}» ve directo a Explotar.</div>`+_sqliNav(4,'Explotar →');
+      ? `<div class="enum-note-info" style="margin-bottom:8px;">Averigua cuántas columnas devuelve la query (para que el UNION cuadre) y cuáles se ven en la página.</div>`+_sqliCards(dbms,'union')+_sqliNav(4,'Explotar →')
+      : `<div class="enum-note-info">El nº de columnas solo hace falta para UNION. Con «${SQLI_TYPES[_sqliType]?.label||'este tipo'}» ve directo a Explotar.</div>`+_sqliNav(4,'Explotar →');
   } else if(_sqliPhase===4){
-    if(!_sqliType) body=`<div class="enum-note">Primero elige el tipo en la Fase 2.</div>`+_sqliNav(2,'← Elegir tipo');
-    else if(_sqliType==='union') body=`<div class="enum-note" style="margin-bottom:8px;">Identifica el motor y enumera: tablas → columnas → volcado.</div>`
+    if(!_sqliType) body=`<div class="enum-note-info">Primero elige el tipo en la Fase 2.</div>`+_sqliNav(2,'← Elegir tipo');
+    else if(_sqliType==='union') body=`<div class="enum-note-info" style="margin-bottom:8px;">Identifica el motor y enumera: tablas → columnas → volcado.</div>`
       +`<div class="svc-lbl" style="margin:6px 0;">Fingerprint del motor</div>`+_sqliCards(dbms,'fingerprint')
       +`<div class="svc-lbl" style="margin:10px 0 6px;">Enumeración</div>`+_sqliCards(dbms,'enum');
-    else if(_sqliType==='error') body=`<div class="enum-note" style="margin-bottom:8px;">Fuerzas errores cuyo texto contenga el dato (sacas un valor por error). Requiere que la app muestre los errores SQL.</div>`+_sqliCards(dbms,'error');
-    else if(_sqliType==='bool') body=`<div class="enum-note" style="margin-bottom:8px;line-height:1.6;"><b>Metodología (la misma en todos los motores; solo cambia la sintaxis del payload):</b> no ves el dato, lo <b>deduces por la respuesta</b>. Preguntas «¿el carácter N del dato cumple X?»: si es <b>verdad</b>, la página responde de una forma (la «verdadera»); si es <b>falsa</b>, de otra (cambia el texto, el tamaño o el código HTTP). Lo automatizas con <b>Burp Intruder</b> (o un script): barres cada <b>posición</b> (carácter 1, 2, 3…) y cada <b>valor</b> (búsqueda binaria por su código ASCII), y el que da la respuesta «verdadera» es el correcto. Repites hasta reconstruir todo el dato.</div>`+_sqliCards(dbms,'bool');
-    else if(_sqliType==='time') body=`<div class="enum-note" style="margin-bottom:8px;line-height:1.6;"><b>Metodología (la misma en todos los motores; solo cambia la sintaxis del payload):</b> no ves el dato, lo <b>deduces por el retardo</b>. Preguntas «¿el carácter N del dato cumple X?»: si es <b>verdad</b>, la respuesta <b>tarda ~3s</b>; si es <b>falsa</b>, va rápida. Lo automatizas con <b>Burp Intruder</b> (o un script): barres cada <b>posición</b> (carácter 1, 2, 3…) y cada <b>valor</b> (búsqueda binaria por su código ASCII), y el que <b>tarda ~3s</b> es el correcto. Repites hasta reconstruir todo el dato.</div>`+_sqliCards(dbms,'time');
+    else if(_sqliType==='error') body=`<div class="enum-note-info" style="margin-bottom:8px;">Fuerzas errores cuyo texto contenga el dato (sacas un valor por error). Requiere que la app muestre los errores SQL.</div>`+_sqliCards(dbms,'error');
+    else if(_sqliType==='bool') body=`<div class="enum-note-info" style="margin-bottom:8px;line-height:1.6;"><b>Metodología (la misma en todos los motores; solo cambia la sintaxis del payload):</b> no ves el dato, lo <b>deduces por la respuesta</b>. Preguntas «¿el carácter N del dato cumple X?»: si es <b>verdad</b>, la página responde de una forma (la «verdadera»); si es <b>falsa</b>, de otra (cambia el texto, el tamaño o el código HTTP). Lo automatizas con <b>Burp Intruder</b> (o un script): barres cada <b>posición</b> (carácter 1, 2, 3…) y cada <b>valor</b> (búsqueda binaria por su código ASCII), y el que da la respuesta «verdadera» es el correcto. Repites hasta reconstruir todo el dato.</div>`+_sqliCards(dbms,'bool');
+    else if(_sqliType==='time') body=`<div class="enum-note-info" style="margin-bottom:8px;line-height:1.6;"><b>Metodología (la misma en todos los motores; solo cambia la sintaxis del payload):</b> no ves el dato, lo <b>deduces por el retardo</b>. Preguntas «¿el carácter N del dato cumple X?»: si es <b>verdad</b>, la respuesta <b>tarda ~3s</b>; si es <b>falsa</b>, va rápida. Lo automatizas con <b>Burp Intruder</b> (o un script): barres cada <b>posición</b> (carácter 1, 2, 3…) y cada <b>valor</b> (búsqueda binaria por su código ASCII), y el que <b>tarda ~3s</b> es el correcto. Repites hasta reconstruir todo el dato.</div>`+_sqliCards(dbms,'time');
   }
   // Bloque independiente: bypass de login (caso aparte del flujo de extracción)
   const login=`<div style="margin-top:16px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);padding:12px;">
     <div class="svc-lbl" style="margin-bottom:6px;">🔑 Bypass de login — caso aparte</div>
-    <div class="enum-note" style="margin-bottom:8px;">No forma parte del flujo de extracción de arriba: sirve para saltarte un formulario de autenticación.</div>`+_sqliCards(dbms,'login')+`</div>`;
+    <div class="enum-note-info" style="margin-bottom:8px;">No forma parte del flujo de extracción de arriba: sirve para saltarte un formulario de autenticación.</div>`+_sqliCards(dbms,'login')+`</div>`;
   out.innerHTML=stepper+body+login;
 }
 
@@ -5552,7 +5556,7 @@ function toggleEnumAcc(hd){
 }
 
 // Network discovery command generator
-const _ENUM_FLAGS={pn:false,v:false,sV:true,sC:true,O:false,A:false,oN:false};
+const _ENUM_FLAGS={p:false,pn:false,v:false,sV:true,sC:true,O:false,A:false,oN:false};
 function toggleEnumFlag(flag){
   _ENUM_FLAGS[flag]=!_ENUM_FLAGS[flag];
   document.getElementById('tgl-'+flag).classList.toggle('active',_ENUM_FLAGS[flag]);
@@ -5646,8 +5650,10 @@ function buildNmapCmd(){
   const rate=document.getElementById('nmapSpeed').value;
   const ports=(document.getElementById('nmapPorts').value||'').trim();
 
-  // Phase 1
-  let cmd1='sudo nmap -p- --min-rate '+rate;
+  // Phase 1 — -p- es opcional (toggle), como -Pn y -v
+  let cmd1='sudo nmap';
+  if(_ENUM_FLAGS.p)  cmd1+=' -p-';
+  cmd1+=' --min-rate '+rate;
   if(_ENUM_FLAGS.pn) cmd1+=' -Pn';
   if(_ENUM_FLAGS.v)  cmd1+=' -v';
   cmd1+=' '+ip;
