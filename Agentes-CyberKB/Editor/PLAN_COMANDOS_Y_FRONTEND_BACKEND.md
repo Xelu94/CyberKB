@@ -263,9 +263,27 @@ activa solo desde la pestaña Editor completa, no desde el atajo rápido.
       endpoints responden (`/api/cinefilo/transcribir`, `/api/escritor/resumen-agente`,
       `/api/agrupador/agrupar`, `/api/bbdd/ingesta`, `/api/obsi/sync`), sin tocar
       datos reales en la prueba.
-- [x] Decidir Parte 2.4 (convivencia / migración / híbrida) — **decidido
-      (2026-09-28): Opción 2, Migración.** Ver el detalle en la Parte 2.4. Falta
-      construirlo: `/api/upload`/`/api/analyze` migrar a `POST /api/escritor/resumen`.
+- [x] Decidir Parte 2.4 (convivencia / migración / híbrida) — **decidido y
+      construido (2026-09-28): Opción 2, Migración.** `/api/upload` llama a
+      Escritor (`_procesar()` directo, sin HTTP); `/api/analyze` llama a
+      Agrupador directo, sin pasar por Escritor (pensado para texto corto y
+      concreto). Sin `auto_save`: la cadena decide sola si guarda. Límite
+      mínimo de 200 caracteres eliminado en Agrupador (`/api/analyze` también
+      manda texto corto). De paso se unificaron `/api/notes/{id}/extract` y
+      `/api/graph/reindex-all` para reanalizar la nota entera vía Agrupador en
+      vez de solo entidades con el `ai.extract_entities()` viejo. Verificado
+      end-to-end (BBDD, `/api/graph`, vault) con varias rondas reales.
+- [ ] **Modo Forense (`/api/forensic/analyze`) sigue sin unificar, a
+      propósito.** Es la única llamada que queda a `ai.extract_entities()`.
+      Reanalizarlo por Agrupador (como se hizo con `extract`/`reindex-all`)
+      arriesgaba pisar su categorización especializada (`ai.generate_forensic_note()`,
+      construida sobre VT/MalwareBazaar/Any.run, más precisa para malware que
+      la clasificación genérica de Agrupador) — Agente-BBDD reconocería la nota
+      forense por `título`+`source_file` (`"forensic:<hash>"`) y la
+      actualizaría con lo que Agrupador adivine. Pendiente de decidir: dejarlo
+      como está, unificar aceptando el riesgo, o blindarlo (nota separada +
+      reenlazar entidades a la nota forense real). Preguntado una vez
+      (2026-09-28), el usuario no se pronunció — sigue abierto.
 
 ---
 
