@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Optional
 
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -359,8 +359,8 @@ for _carpeta in ("Cinefilo", "Escritor", "Agrupador", "Agente-BBDD", "Obsi"):
     sys.path.insert(0, str(_AGENTES_DIR / _carpeta))
 
 from cinefilo import router as cinefilo_router
-from escritor import router as escritor_router
-from agrupador import router as agrupador_router
+from escritor import router as escritor_router, _procesar as _escritor_procesar
+from agrupador import router as agrupador_router, _procesar as _agrupador_procesar, ResumenEscritor
 from agente_bbdd import router as bbdd_router
 from obsi import router as obsi_router
 
@@ -519,18 +519,36 @@ class AnalyzeIn(BaseModel):
 
 @app.post("/api/analyze")
 def analyze_text(data: AnalyzeIn, db: Session = Depends(get_db)):
-    result = ai.analyze_content(data.text)
-    # Persist tools discovered
-    _persist_tools(result.get("tools", []), db)
-    return result
+    """Texto pegado directamente en el editor (sin fichero): va derecho a Agrupador,
+    sin pasar por Escritor — pensado para contenido corto y ya concreto (un comando,
+    una CVE, una ficha de herramienta), no para documentos largos que necesiten
+    resumen previo. Ver PLAN_COMANDOS_Y_FRONTEND_BACKEND.md Parte 2.4."""
+    resumen = ResumenEscritor(
+        id=uuid.uuid4().hex,
+        titulo=(data.title or "").strip() or "Sin titulo",
+        resumen=data.text,
+        source="app-analyze",
+    )
+    resultado = _agrupador_procesar(resumen)
+
+    nota = None
+    if resultado.get("bbdd_entregado"):
+        nota = (
+            db.query(Note)
+            .filter(Note.title == resultado["titulo"])
+            .order_by(Note.id.desc())
+            .first()
+        )
+
+    return {"agrupador": resultado, "note": _note_dict(nota, full=True) if nota else None}
 
 
 @app.post("/api/upload")
-async def upload_document(
-    file: UploadFile = File(...),
-    auto_save: bool = Form(False),
-    db: Session = Depends(get_db),
-):
+def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Documento subido desde el editor: va a Escritor, que encadena a Agrupador ->
+    Agente-BBDD -> Obsi. Sin auto_save: la cadena decide por si sola si guarda (ya no
+    hay paso intermedio de previsualizar sin guardar). Ver PLAN_COMANDOS_Y_FRONTEND_BACKEND.md
+    Parte 2.4."""
     ext = Path(file.filename).suffix.lower()
     if ext not in (".pdf", ".odt", ".txt", ".md", ".log"):
         raise HTTPException(400, f"Unsupported file type: {ext}")
@@ -543,110 +561,23 @@ async def upload_document(
     if not text.strip():
         raise HTTPException(422, "No text could be extracted from the file.")
 
-    analysis = ai.analyze_content(text)
-    tools = _persist_tools(analysis.get("tools", []), db)
+    resultado = _escritor_procesar(text, "app", file.filename)
 
-    note_id = None
-    if auto_save:
-        n = Note(
-            title=Path(file.filename).stem,
-            content=text[:20000],
-            category=analysis.get("category", "teoria"),
-            subcategory=analysis.get("subcategory"),
-            summary=analysis.get("summary"),
-            tags=json.dumps(analysis.get("tags", [])),
-            source_file=file.filename,
+    nota = None
+    if resultado.get("agrupador_entregado"):
+        nota = (
+            db.query(Note)
+            .filter(Note.title == resultado["titulo"], Note.source_file == file.filename)
+            .order_by(Note.id.desc())
+            .first()
         )
-        db.add(n)
-        db.commit()
-        db.refresh(n)
-        _persist_commands(analysis.get("commands", []), n, db)
-        _persist_cves(analysis.get("cves", []), n, db)
-        _persist_mitre(analysis.get("mitre_techniques", []), n, db)
-        for t in tools:
-            if t not in n.tools:
-                n.tools.append(t)
-        db.commit()
-        # Extract graph entities asynchronously (best-effort)
-        try:
-            ent_result = ai.extract_entities(text[:6000])
-            _persist_entities(ent_result.get("entities", []), ent_result.get("relations", []), n, db)
-        except Exception as _e:
-            pass  # entity extraction failure must not break upload
-        note_id = n.id
 
     return {
         "filename": file.filename,
         "text_length": len(text),
-        "analysis": analysis,
-        "note_id": note_id,
+        "escritor": resultado,
+        "note": _note_dict(nota, full=True) if nota else None,
     }
-
-
-def _persist_tools(tools_data: list, db: Session) -> list:
-    result = []
-    for td in tools_data:
-        name = td.get("name", "").strip()
-        if not name:
-            continue
-        t = db.query(Tool).filter(Tool.name.ilike(name)).first()
-        if t:
-            t.mention_count = (t.mention_count or 0) + 1
-            if not t.url and td.get("url"):
-                t.url = td["url"]
-            if not t.description and td.get("description"):
-                t.description = td["description"]
-        else:
-            url = td.get("url")
-            if not url:
-                name_lower = name.lower()
-                url = ai.KNOWN_TOOLS.get(name_lower)
-            t = Tool(
-                name=name,
-                url=url,
-                description=td.get("description"),
-                tool_type=td.get("tool_type", ai.detect_tool_type(name)),
-                mention_count=1,
-            )
-            db.add(t)
-        db.commit()
-        db.refresh(t)
-        result.append(t)
-    return result
-
-
-def _persist_commands(cmds: list, note: Note, db: Session):
-    for cd in cmds:
-        cmd_str = cd.get("command", "").strip()
-        if not cmd_str:
-            continue
-        detected_os = cd.get("os") or ai.detect_command_os(cmd_str)
-        c = Command(
-            command=cmd_str,
-            description=cd.get("description"),
-            tool_name=cd.get("tool"),
-            os=detected_os,
-            flags=json.dumps(cd.get("flags", [])),
-            note_id=note.id,
-        )
-        db.add(c)
-    db.commit()
-
-
-def _persist_cves(cves: list, note: Note, db: Session):
-    for cd in cves:
-        cve_id = cd.get("id", "").strip()
-        if not cve_id:
-            continue
-        existing = db.query(CVE).filter(CVE.cve_id == cve_id).first()
-        if not existing:
-            c = CVE(
-                cve_id=cve_id,
-                description=cd.get("description"),
-                note_id=note.id,
-            )
-            db.add(c)
-    db.commit()
 
 
 def _persist_mitre(techniques: list, note: Note, db: Session):
@@ -882,22 +813,35 @@ def get_graph(db: Session = Depends(get_db)):
     }
 
 
+def _reanalizar_con_agrupador(n: Note) -> dict:
+    """Re-envia una nota ya existente por Agrupador: mismo titulo/fichero de
+    origen para que Agente-BBDD la reconozca como la misma fila (upsert, no
+    duplicado) y actualice tools/commands/cves/mitre/entidades a la vez -- no
+    solo entidades, unificado con /api/analyze y /api/upload (2026-09-28)."""
+    resumen = ResumenEscritor(
+        id=uuid.uuid4().hex,
+        titulo=n.title,
+        resumen=n.content or n.summary or "",
+        source="app-reextract",
+        archivo_original=n.source_file,
+    )
+    return _agrupador_procesar(resumen)
+
+
 @app.post("/api/notes/{note_id}/extract")
 def extract_note_entities(note_id: int, db: Session = Depends(get_db)):
-    """Re-extract graph entities from an existing note."""
+    """Re-analiza una nota existente a traves de Agrupador."""
     n = db.query(Note).filter(Note.id == note_id).first()
     if not n:
         raise HTTPException(404, "Note not found")
-    result = ai.extract_entities(n.content[:6000])
-    _persist_entities(result.get("entities", []), result.get("relations", []), n, db)
-    return {"extracted": len(result.get("entities", []))}
+    resultado = _reanalizar_con_agrupador(n)
+    return {"agrupador": resultado, "extracted": len(resultado.get("entities", []))}
 
 
 @app.post("/api/graph/reindex-all")
 def reindex_all_entities(db: Session = Depends(get_db)):
-    """Clear all graph data and re-extract entities from every note using Claude AI."""
+    """Reanaliza todas las notas a traves de Agrupador y reconstruye el grafo."""
     from sqlalchemy import text
-    # Wipe existing graph data
     db.execute(text("DELETE FROM entity_note_map"))
     db.execute(text("DELETE FROM entity_relations"))
     db.execute(text("DELETE FROM graph_entities"))
@@ -908,10 +852,8 @@ def reindex_all_entities(db: Session = Depends(get_db)):
     errors = 0
     for n in notes:
         try:
-            result = ai.extract_entities(n.content[:6000])
-            entities = result.get("entities", [])
-            _persist_entities(entities, result.get("relations", []), n, db)
-            total_entities += len(entities)
+            resultado = _reanalizar_con_agrupador(n)
+            total_entities += len(resultado.get("entities", []))
         except Exception as e:
             errors += 1
             print(f"[reindex] Note {n.id} failed: {e}")

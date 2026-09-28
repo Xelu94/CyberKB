@@ -1498,17 +1498,13 @@ EXEC xp_cmdshell 'whoami';</pre>
 <div class="overlay" id="uploadModal">
   <div class="modal">
     <h3>⊕ Subir Documento</h3>
-    <p>Sube un archivo .pdf, .odt, .txt o .md. Claude analizará el contenido, lo clasificará automáticamente y detectará herramientas, comandos y CVEs.</p>
+    <p>Sube un archivo .pdf, .odt, .txt o .md. Pasa por la cadena de agentes (Escritor → Agrupador → BBDD → Obsidian), que lo clasifica, extrae herramientas/comandos/CVEs y lo guarda automáticamente si es contenido válido.</p>
     <div class="drop-zone" id="modalDrop" onclick="document.getElementById('modalFile').click()" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFile(event,true)">
       <input type="file" id="modalFile" accept=".pdf,.odt,.txt,.md,.log" onchange="uploadFile(this.files[0],true)">
       <div class="dz-icon">📤</div>
       <div id="modalDropLabel">Seleccionar archivo</div>
       <div class="dz-note">.pdf  .odt  .txt  .md  .log</div>
     </div>
-    <label>Guardar automáticamente como nota</label>
-    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:12px;color:var(--text2);">
-      <input type="checkbox" id="autoSave" style="width:auto;"> Sí, guardar como nota automáticamente
-    </label>
     <div class="upload-progress" id="uploadProgress">
       <div class="upload-progress-label" id="uploadProgressLabel">⏳ Extrayendo texto y analizando con IA...</div>
       <div class="upload-progress-track">
@@ -2036,20 +2032,25 @@ async function deleteNote(){
 async function analyzeNote(){
   const text=document.getElementById('noteContent').value.trim();
   if(!text){setStatus('Escribe contenido antes de analizar','warn');return;}
-  showGlobalProgress('Analizando con IA...');
+  showGlobalProgress('Analizando con Agrupador...');
   document.getElementById('btnAnalyze').disabled=true;
   document.getElementById('btnAnalyze').innerHTML='<span class="dots"><span></span><span></span><span></span></span>';
   try{
     const title=document.getElementById('noteTitle').value;
     const res=await API.post('/api/analyze',{text,title});
-    showAIResult(res);
-    document.getElementById('noteCat').value=res.category||'teoria';
-    if(res.tags&&res.tags.length&&!document.getElementById('noteTags').value)
-      document.getElementById('noteTags').value=res.tags.join(', ');
-    if(res.summary&&!document.getElementById('noteTitle').value&&res.subcategory)
-      document.getElementById('noteTitle').value=res.subcategory;
-    await loadAll();
-    hideGlobalProgress('Análisis completado — '+res.tools.length+' tools, '+res.commands.length+' comandos detectados');
+    const n=res.note;
+    if(n){
+      showAIResult(n);
+      document.getElementById('noteCat').value=n.category||'teoria';
+      if(n.tags&&n.tags.length&&!document.getElementById('noteTags').value)
+        document.getElementById('noteTags').value=n.tags.join(', ');
+      if(!document.getElementById('noteTitle').value&&n.subcategory)
+        document.getElementById('noteTitle').value=n.subcategory;
+      await loadAll();
+      hideGlobalProgress('Guardado — '+n.tools.length+' tools, '+n.commands.length+' comandos detectados');
+    } else {
+      hideGlobalProgress('Procesado, pero no se ha guardado (Agrupador/BBDD no confirmaron)','warn');
+    }
   }catch(e){hideGlobalProgress('Error en análisis: '+e.message,'error');}
   document.getElementById('btnAnalyze').disabled=false;
   document.getElementById('btnAnalyze').innerHTML='✦ Analizar';
@@ -2110,48 +2111,58 @@ function dropFile(e,modal=false){
 
 async function uploadFile(file,modal=false){
   if(!file) return;
-  const autoSave=modal?document.getElementById('autoSave').checked:false;
   if(modal){
     setStatus('Procesando '+file.name+'...');
   } else {
     showGlobalProgress('Procesando '+file.name+'...');
   }
   if(modal){
-    document.getElementById('modalDropLabel').textContent='⏳ Analizando '+file.name+'...';
+    document.getElementById('modalDropLabel').textContent='⏳ Procesando '+file.name+'...';
     document.getElementById('uploadProgress').style.display='block';
-    document.getElementById('uploadProgressLabel').textContent='⏳ Extrayendo texto y analizando con IA...';
+    document.getElementById('uploadProgressLabel').textContent='⏳ Escritor → Agrupador → BBDD → Obsidian...';
     document.getElementById('uploadResult').style.display='none';
   }
 
   const fd=new FormData();
   fd.append('file',file);
-  fd.append('auto_save',autoSave?'true':'false');
   try{
     const r=await fetch('/api/upload',{method:'POST',body:fd});
     if(!r.ok) throw new Error(await r.text());
     const data=await r.json();
-    const a=data.analysis;
+    const n=data.note;
 
-    document.getElementById('noteTitle').value=file.name.replace(/\.[^.]+$/,'');
-    document.getElementById('noteContent').value=data.analysis.summary||'';
-    showAIResult(a);
-    document.getElementById('noteCat').value=a.category||'teoria';
-    if(a.tags&&a.tags.length) document.getElementById('noteTags').value=a.tags.join(', ');
+    if(n){
+      document.getElementById('noteTitle').value=n.title||file.name.replace(/\.[^.]+$/,'');
+      document.getElementById('noteContent').value=n.summary||'';
+      showAIResult(n);
+      document.getElementById('noteCat').value=n.category||'teoria';
+      if(n.tags&&n.tags.length) document.getElementById('noteTags').value=n.tags.join(', ');
+    }
 
     if(modal){
       document.getElementById('modalDropLabel').textContent='✓ '+file.name;
       document.getElementById('uploadProgress').style.display='none';
-      let rhtml=`<div class="osint-result-card" style="margin-top:8px;">
-        <div class="osint-result-hd">Resultado del análisis</div>
-        <div class="osint-kv">
-          <span class="osint-key">Categoría</span><span class="osint-val"><span class="cat-badge cat-${a.category}">${catLabel(a.category)}</span></span>
-          <span class="osint-key">Tema</span><span class="osint-val">${esc(a.subcategory||'—')}</span>
-          <span class="osint-key">Herramientas</span><span class="osint-val">${(a.tools||[]).map(t=>esc(t.name)).join(', ')||'—'}</span>
-          <span class="osint-key">Comandos</span><span class="osint-val">${(a.commands||[]).length}</span>
-          <span class="osint-key">CVEs</span><span class="osint-val">${(a.cves||[]).length}</span>
-        </div>
-        ${data.note_id?`<div style="margin-top:8px;font-size:11px;color:var(--green);font-family:var(--mono);">✓ Guardado como nota #${data.note_id}</div>`:''}
-      </div>`;
+      let rhtml;
+      if(n){
+        rhtml=`<div class="osint-result-card" style="margin-top:8px;">
+          <div class="osint-result-hd">Resultado del análisis</div>
+          <div class="osint-kv">
+            <span class="osint-key">Categoría</span><span class="osint-val"><span class="cat-badge cat-${n.category}">${catLabel(n.category)}</span></span>
+            <span class="osint-key">Tema</span><span class="osint-val">${esc(n.subcategory||'—')}</span>
+            <span class="osint-key">Herramientas</span><span class="osint-val">${(n.tools||[]).map(t=>esc(t.name)).join(', ')||'—'}</span>
+            <span class="osint-key">Comandos</span><span class="osint-val">${(n.commands||[]).length}</span>
+            <span class="osint-key">CVEs</span><span class="osint-val">${(n.cves||[]).length}</span>
+          </div>
+          <div style="margin-top:8px;font-size:11px;color:var(--green);font-family:var(--mono);">✓ Guardado como nota #${n.id}</div>
+        </div>`;
+      } else {
+        rhtml=`<div class="osint-result-card" style="margin-top:8px;">
+          <div class="osint-result-hd">Resultado del análisis</div>
+          <div style="font-size:11px;color:var(--text3);font-family:var(--mono);padding:8px 0;">
+            Procesado pero no guardado — Escritor/Agrupador/BBDD no confirmaron (puede que el contenido no se clasificara como ciberseguridad, o que algún paso de la cadena fallara).
+          </div>
+        </div>`;
+      }
       document.getElementById('uploadResult').innerHTML=rhtml;
       document.getElementById('uploadResult').style.display='block';
     }
@@ -2159,8 +2170,13 @@ async function uploadFile(file,modal=false){
     S.graphData=null;  // invalidate graph cache
     await loadAll();
     if(!modal) switchTab('editor');
-    if(modal) setStatus('Documento procesado — '+a.tools.length+' tools, '+a.commands.length+' comandos');
-    else hideGlobalProgress('Documento procesado — '+a.tools.length+' tools, '+a.commands.length+' comandos');
+    if(n){
+      if(modal) setStatus('Documento procesado — '+n.tools.length+' tools, '+n.commands.length+' comandos');
+      else hideGlobalProgress('Documento procesado — '+n.tools.length+' tools, '+n.commands.length+' comandos');
+    } else {
+      if(modal) setStatus('Procesado, no guardado','warn');
+      else hideGlobalProgress('Procesado, no guardado','warn');
+    }
   }catch(e){
     if(modal) setStatus('Error procesando archivo: '+e.message,'error');
     else hideGlobalProgress('Error procesando archivo: '+e.message,'error');

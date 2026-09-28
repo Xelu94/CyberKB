@@ -308,11 +308,9 @@ def _entregar(url: str, timeout: float, payload: dict) -> bool:
 
 
 def _procesar(resumen: ResumenEscritor) -> dict:
-    # No es un fallo al agrupar, sino material insuficiente: lleva mensaje propio
-    # porque reintentar con el mismo texto no puede arreglarlo.
-    if _visibles(resumen.resumen) < LIMITES["caracteres_minimos"]:
-        raise HTTPException(422, ERRORES["resumen_corto"])
-
+    # Sin minimo de caracteres a proposito: la app tambien manda aqui texto corto
+    # y concreto (un comando, una CVE, una ficha de herramienta) via /api/analyze,
+    # que no tiene por que llegar a ningun umbral de longitud (2026-09-28).
     try:
         agrupacion = _validar(_clasificar(resumen))
     except Exception:
