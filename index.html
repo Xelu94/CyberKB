@@ -710,7 +710,9 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
           ☣ MalwareBazaar <span class="needs-key">API</span>
         </button>
 
-        <div class="sb-section" style="padding:8px 10px 4px;font-size:9px;color:var(--text3);letter-spacing:1px;margin-top:4px;">HISTORIAL</div>
+        <div class="sb-section" style="padding:8px 10px 4px;font-size:9px;color:var(--text3);letter-spacing:1px;margin-top:4px;display:flex;align-items:center;justify-content:space-between;">HISTORIAL
+          <button onclick="clearOsintHistory()" title="Vaciar historial" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:10px;padding:0;font-family:var(--mono);">🗑 Limpiar</button>
+        </div>
         <div id="osintHistoryList" style="font-size:10px;color:var(--text3);padding:0 6px;"></div>
       </div>
       <div class="osint-main">
@@ -2979,14 +2981,17 @@ function renderOsintResult(tool,q,data){
 }
 
 async function loadOsintHistory(){
+  const list=document.getElementById('osintHistoryList');
   try{
     const hist=await API.get('/api/osint/history');
-    document.getElementById('osintHistoryList').innerHTML=hist.slice(0,10).map(h=>
+    list.innerHTML=hist.slice(0,10).map(h=>
       `<div class="history-row" onclick='loadOsintHistResult(${h.id},${jarg(h.type)})'>
         <span style="color:var(--text3);font-size:9px">${esc(h.type)}</span><br>${esc(h.query.substring(0,22))}
       </div>`
     ).join('')||'<div style="padding:4px 8px;font-size:10px">Sin historial</div>';
-  }catch(e){}
+  }catch(e){
+    list.innerHTML='<div style="padding:4px 8px;font-size:10px;color:var(--orange)">No se pudo cargar el historial</div>';
+  }
 }
 
 async function loadOsintHistResult(id,tool){
@@ -2994,7 +2999,17 @@ async function loadOsintHistResult(id,tool){
     const data=await API.get('/api/osint/history/'+id);
     if(tool) S.osintTool=tool;
     renderOsintResult(S.osintTool,'(historial)',data);
-  }catch(e){}
+  }catch(e){ setStatus('No se pudo abrir el resultado del historial: '+e.message,'error'); }
+}
+
+// Vacía todo el historial de consultas OSINT.
+async function clearOsintHistory(){
+  if(!confirm('¿Vaciar todo el historial de OSINT?')) return;
+  try{
+    const r=await API.del('/api/osint/history');
+    loadOsintHistory();
+    setStatus('Historial OSINT vaciado'+(r&&r.deleted!=null?(' ('+r.deleted+' entradas)'):''));
+  }catch(e){ setStatus('Error vaciando el historial: '+e.message,'error'); }
 }
 
 // ─── GRAPH ────────────────────────────────────────────────────────────────────

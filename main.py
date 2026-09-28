@@ -1532,6 +1532,14 @@ def osint_history(db: Session = Depends(get_db)):
     ]
 
 
+@app.delete("/api/osint/history")
+def osint_history_clear(db: Session = Depends(get_db)):
+    """[Módulo OSINT] Vacía todo el historial de consultas (botón 🗑 Limpiar)."""
+    n = db.query(OsintResult).delete()
+    db.commit()
+    return {"deleted": n}
+
+
 @app.get("/api/osint/history/{result_id}")
 def osint_result(result_id: int, db: Session = Depends(get_db)):
     r = db.query(OsintResult).filter(OsintResult.id == result_id).first()
