@@ -33,6 +33,9 @@ Thumbs.db
 # Compiled EXE (too large for GitHub)
 *.exe
 
+# Obsidian vault — personal workspace/UI state per user (not shared)
+vault/.obsidian/
+
 # Keep these dirs tracked
 !data/.gitkeep
 !uploads/.gitkeep
