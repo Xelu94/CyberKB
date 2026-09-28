@@ -44,9 +44,4 @@ vault/.obsidian/
 Agentes-CyberKB/Editor/*/videos/
 Agentes-CyberKB/Editor/*/resumenes/
 Agentes-CyberKB/Editor/*/agrupaciones/
-
-# Registro de decisiones del mockup del Editor (log de trabajo, solo local)
-Agentes-CyberKB/Editor/DECISIONES_EDITOR.md
-
-# Comparativa main/capas vs agentes (referencia de trabajo, solo local)
-Agentes-CyberKB/Editor/COMPARATIVA_MAIN_VS_AGENTES.md
+.tools_base_seeded
