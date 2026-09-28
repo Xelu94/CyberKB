@@ -17,104 +17,33 @@ Opcional:
 
 Dónde se escribe el vault (en este orden de prioridad):
     1. --out ruta/al/vault           (flag explícito)
-    2. variable de entorno OBSIDIAN_VAULT_DIR   (misma convención que usará el
-       agente 3b — Obsi; ponla en tu .env si quieres tu vault fuera del repo)
+    2. variable de entorno OBSIDIAN_VAULT_DIR   (misma convención que usa el
+       agente Obsi; ponla en tu .env si quieres tu vault fuera del repo)
     3. ./vault                       (por defecto, dentro del proyecto)
 
-Re-ejecutar sobreescribe las notas generadas (no borra ficheros manuales que
-hayas creado tú dentro del vault).
+Re-ejecutar es seguro con el agente Obsi ya en producción (2026-09-28, Opción C):
+este script comparte con Obsi la misma lógica de sincronización por `id` de
+`Agentes-CyberKB/Editor/Obsi/vault_lib.py` (repo hermano) — localiza cada nota por
+su `id` de frontmatter, no por nombre de fichero, y borra la nota vieja si el
+título cambió. No sobrescribe a ciegas ni deja duplicados, se re-ejecute cuando se
+re-ejecute.
 """
 
 import argparse
-import json
 import os
-import re
 import sqlite3
-from datetime import datetime, timezone
+import sys
 from pathlib import Path
 
-# ── Rutas por defecto (relativas a la raíz del proyecto; nunca hardcodear rutas
-#    de un usuario concreto — cada persona configura la suya vía --out o
-#    OBSIDIAN_VAULT_DIR) ──────────────────────────────────────────────────────
+# vault_lib.py vive en el repo hermano de agentes (mismo patrón que usa main.py
+# para importar los agentes, aplicado al revés: un script de la app importando
+# algo del repo de agentes).
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT.parent / "Agentes-CyberKB" / "Editor" / "Obsi"))
+import vault_lib as vl  # noqa: E402
+
 DEFAULT_DB = PROJECT_ROOT / "data" / "cyberkb.db"
 DEFAULT_VAULT = Path(os.getenv("OBSIDIAN_VAULT_DIR") or (PROJECT_ROOT / "vault"))
-
-SUBFOLDERS = {
-    "nota": "Notas",
-    "comando": "Comandos",
-    "cve": "CVEs",
-    "herramienta": "Herramientas",
-    "tecnica-mitre": "Tecnicas-MITRE",
-}
-
-# Caracteres prohibidos en nombres de fichero (Windows) y conflictivos en Obsidian.
-_BAD_CHARS = re.compile(r'[\\/:*?"<>|\[\]#^]+')
-_WS = re.compile(r"\s+")
-
-
-def sanitize(name: str, fallback: str) -> str:
-    """Nombre de fichero/wikilink seguro y legible."""
-    if not name:
-        return fallback
-    name = _BAD_CHARS.sub(" ", str(name))
-    name = _WS.sub(" ", name).strip(" .")
-    if not name:
-        return fallback
-    return name[:80].strip()
-
-
-class NameAllocator:
-    """Garantiza nombres de wikilink únicos dentro de un mismo tipo."""
-
-    def __init__(self):
-        self._used = set()
-
-    def take(self, base: str) -> str:
-        candidate = base
-        i = 2
-        low = candidate.lower()
-        while low in self._used:
-            candidate = f"{base}-{i}"
-            low = candidate.lower()
-            i += 1
-        self._used.add(low)
-        return candidate
-
-
-def to_iso(value) -> str:
-    """Convierte una fecha de SQLite a ISO 8601. Si falta, usa 'ahora'."""
-    if not value:
-        return datetime.now(timezone.utc).isoformat(timespec="seconds")
-    s = str(value).strip().replace(" ", "T", 1)
-    return s
-
-
-def parse_tags(raw) -> list:
-    if not raw:
-        return []
-    try:
-        val = json.loads(raw)
-        if isinstance(val, list):
-            return [str(t) for t in val if t]
-    except (json.JSONDecodeError, TypeError):
-        # Puede venir como cadena separada por comas
-        return [t.strip() for t in str(raw).split(",") if t.strip()]
-    return []
-
-
-def frontmatter(fields: dict) -> str:
-    lines = ["---"]
-    for k, v in fields.items():
-        lines.append(f"{k}: {v}")
-    lines.append("---")
-    return "\n".join(lines)
-
-
-def write_note(vault: Path, tipo: str, filename: str, body: str):
-    folder = vault / SUBFOLDERS[tipo]
-    folder.mkdir(parents=True, exist_ok=True)
-    (folder / f"{filename}.md").write_text(body, encoding="utf-8")
 
 
 def main():
@@ -140,39 +69,19 @@ def main():
     tools = list(cur.execute("SELECT * FROM tools"))
     tool_notes = list(cur.execute("SELECT tool_id, note_id FROM tool_notes"))
 
-    # ── Asignar nombres de wikilink únicos por tipo ───────────────────────────────
-    note_alloc, tool_alloc, cmd_alloc = NameAllocator(), NameAllocator(), NameAllocator()
-
-    note_link = {}   # note_id -> wikilink name
-    for n in notes:
-        base = sanitize(n["title"], f"Nota-{n['id']}")
-        note_link[n["id"]] = note_alloc.take(base)
-
-    tool_link = {}   # tool_id -> wikilink name
-    tool_by_name = {}  # nombre lower -> wikilink (para enlazar comandos por tool_name)
-    for t in tools:
-        base = sanitize(t["name"], f"Herramienta-{t['id']}")
-        link = tool_alloc.take(base)
-        tool_link[t["id"]] = link
-        if t["name"]:
-            tool_by_name.setdefault(t["name"].strip().lower(), link)
-
-    cve_link = {c["id"]: sanitize(c["cve_id"], f"CVE-{c['id']}") for c in cves}
-
-    # MITRE: una nota por technique_id único (agrega las notas que lo referencian)
-    mitre_by_tech = {}  # technique_id -> {name, tactic, snippets[], note_ids[]}
+    # ── Nombres de wikilink (para las relaciones) ─────────────────────────────────
+    # El nombre final de fichero lo decide vault_lib.write_synced() en el momento
+    # de escribir (unicidad contra disco); aqui solo se necesita un nombre estable
+    # para construir los wikilinks de "Entidades relacionadas" antes de escribir.
+    note_link = {n["id"]: vl.sanitize(n["title"], f"Nota-{n['id']}") for n in notes}
+    tool_link = {t["id"]: vl.sanitize(t["name"], f"Herramienta-{t['id']}") for t in tools}
+    tool_by_name = {
+        t["name"].strip().lower(): tool_link[t["id"]] for t in tools if t["name"]
+    }
+    mitre_ids_por_tecnica = {}
     for m in mitres:
         tid = (m["technique_id"] or f"T-{m['id']}").strip()
-        entry = mitre_by_tech.setdefault(tid, {"name": m["technique_name"], "tactic": m["tactic"], "snippets": [], "note_ids": []})
-        if m["context_snippet"]:
-            entry["snippets"].append(m["context_snippet"])
-        if m["note_id"]:
-            entry["note_ids"].append(m["note_id"])
-    mitre_link = {tid: f"Tecnica-MITRE-{sanitize(tid, tid)}" for tid in mitre_by_tech}
-
-    cmd_link = {}
-    for c in commands:
-        cmd_link[c["id"]] = cmd_alloc.take(f"Comando-{c['id']}")
+        mitre_ids_por_tecnica.setdefault(tid, f"Tecnica-MITRE-{vl.sanitize(tid, tid)}")
 
     # ── Índices de relaciones ─────────────────────────────────────────────────────
     tools_of_note, notes_of_tool = {}, {}
@@ -183,185 +92,123 @@ def main():
     cves_of_note, cmds_of_note = {}, {}
     for c in cves:
         if c["note_id"]:
-            cves_of_note.setdefault(c["note_id"], []).append(c["id"])
+            cves_of_note.setdefault(c["note_id"], []).append(c)
     for c in commands:
         if c["note_id"]:
-            cmds_of_note.setdefault(c["note_id"], []).append(c["id"])
+            cmds_of_note.setdefault(c["note_id"], []).append(c)
 
-    mitres_of_note = {}
-    for tid, e in mitre_by_tech.items():
-        for nid in e["note_ids"]:
-            mitres_of_note.setdefault(nid, []).append(tid)
+    # MITRE: una nota por technique_id único (agrega las notas que lo referencian)
+    mitre_by_tech = {}
+    for m in mitres:
+        tid = (m["technique_id"] or f"T-{m['id']}").strip()
+        entry = mitre_by_tech.setdefault(tid, {"name": m["technique_name"], "tactic": m["tactic"], "snippets": [], "note_ids": []})
+        if m["context_snippet"]:
+            entry["snippets"].append(m["context_snippet"])
+        if m["note_id"]:
+            entry["note_ids"].append(m["note_id"])
 
     counts = {"nota": 0, "comando": 0, "cve": 0, "herramienta": 0, "tecnica-mitre": 0}
-
-    def wl(name):
-        return f"[[{name}]]"
 
     # ── NOTAS ─────────────────────────────────────────────────────────────────────
     for n in notes:
         nid = n["id"]
-        fm = frontmatter({
-            "id": f"nota-{nid}",
-            "tipo": "nota",
-            "fecha_actualizacion": to_iso(n["updated_at"] or n["created_at"]),
-        })
-        parts = [fm, "", f"# {n['title'] or f'Nota {nid}'}", ""]
-        meta = []
-        if n["category"]:
-            meta.append(f"**Categoría:** {n['category']}")
-        if n["subcategory"]:
-            meta.append(f"**Subcategoría:** {n['subcategory']}")
-        tags = parse_tags(n["tags"])
-        if tags:
-            meta.append("**Tags:** " + ", ".join(f"#{_WS.sub('-', t)}" for t in tags))
-        if n["source_file"]:
-            meta.append(f"**Origen:** {n['source_file']}")
-        if meta:
-            parts += meta + [""]
-        if n["summary"]:
-            parts += ["## Resumen", "", n["summary"], ""]
-        if n["content"]:
-            parts += ["## Contenido", "", n["content"], ""]
-
-        rel = []
-        for tid in tools_of_note.get(nid, []):
-            if tid in tool_link:
-                rel.append(wl(tool_link[tid]))
-        for cid in cves_of_note.get(nid, []):
-            rel.append(wl(cve_link[cid]))
-        for tech in mitres_of_note.get(nid, []):
-            rel.append(wl(mitre_link[tech]))
-        for cmid in cmds_of_note.get(nid, []):
-            rel.append(wl(cmd_link[cmid]))
-        if rel:
-            parts += ["## Entidades relacionadas", ""] + rel + [""]
-
-        write_note(vault, "nota", note_link[nid], "\n".join(parts))
+        rel = (
+            [vl.wl(tool_link[tid]) for tid in tools_of_note.get(nid, []) if tid in tool_link]
+            + [vl.wl(vl.sanitize(c["cve_id"], f"CVE-{c['id']}")) for c in cves_of_note.get(nid, [])]
+            + [vl.wl(mitre_ids_por_tecnica[tid]) for tid, e in mitre_by_tech.items() if nid in e["note_ids"]]
+            + [vl.wl(f"Comando-{c['id']}") for c in cmds_of_note.get(nid, [])]
+        )
+        fields = {
+            "id": nid,
+            "title": n["title"],
+            "category": n["category"],
+            "subcategory": n["subcategory"],
+            "tags": vl.parse_tags(n["tags"]),
+            "source_file": n["source_file"],
+            "summary": n["summary"],
+            "content": n["content"],
+            "fecha_actualizacion": n["updated_at"] or n["created_at"],
+        }
+        base, body = vl.build_nota(fields, rel)
+        vl.write_synced(vault, "nota", f"nota-{nid}", base, body)
         counts["nota"] += 1
 
     # ── COMANDOS ──────────────────────────────────────────────────────────────────
     for c in commands:
         cid = c["id"]
-        fm = frontmatter({
-            "id": f"comando-{cid}",
-            "tipo": "comando",
-            "fecha_actualizacion": to_iso(c["created_at"]),
-        })
-        title = (c["command"] or "").strip().splitlines()[0][:70] or f"Comando {cid}"
-        parts = [fm, "", f"# {title}", ""]
-        if c["os"]:
-            parts.append(f"**SO:** {c['os']}")
-        if c["category"]:
-            parts.append(f"**Categoría:** {c['category']}")
-        if c["tool_name"]:
-            parts.append(f"**Herramienta:** {c['tool_name']}")
-        parts.append("")
-        parts += ["```bash", (c["command"] or "").strip(), "```", ""]
-        if c["description"]:
-            parts += [c["description"], ""]
-        flags = parse_tags(c["flags"])
-        if flags:
-            parts += ["**Flags:** " + ", ".join(f"`{f}`" for f in flags), ""]
-
         rel = []
         if c["note_id"] and c["note_id"] in note_link:
-            rel.append(wl(note_link[c["note_id"]]))
+            rel.append(vl.wl(note_link[c["note_id"]]))
         if c["tool_name"]:
             link = tool_by_name.get(c["tool_name"].strip().lower())
             if link:
-                rel.append(wl(link))
-        if rel:
-            parts += ["## Entidades relacionadas", ""] + rel + [""]
+                rel.append(vl.wl(link))
 
-        write_note(vault, "comando", cmd_link[cid], "\n".join(parts))
+        fields = {
+            "id": cid,
+            "command": c["command"],
+            "os": c["os"],
+            "category": c["category"],
+            "tool_name": c["tool_name"],
+            "description": c["description"],
+            "flags": vl.parse_tags(c["flags"]),
+            "fecha_actualizacion": c["created_at"],
+        }
+        base, body = vl.build_comando(fields, rel)
+        vl.write_synced(vault, "comando", f"comando-{cid}", base, body)
         counts["comando"] += 1
 
     # ── CVEs ──────────────────────────────────────────────────────────────────────
     for c in cves:
-        fm = frontmatter({
-            "id": f"cve-{c['cve_id']}",
-            "tipo": "cve",
-            "fecha_actualizacion": to_iso(c["created_at"]),
-        })
-        parts = [fm, "", f"# {c['cve_id']}", ""]
-        if c["title"]:
-            parts += [f"**{c['title']}**", ""]
-        meta = []
-        if c["severity"]:
-            meta.append(f"**Severidad:** {c['severity']}")
-        if c["cvss"] is not None:
-            meta.append(f"**CVSS:** {c['cvss']}")
-        if c["affected"]:
-            meta.append(f"**Afectados:** {c['affected']}")
-        if meta:
-            parts += meta + [""]
-        if c["description"]:
-            parts += ["## Descripción", "", c["description"], ""]
-
         rel = []
         if c["note_id"] and c["note_id"] in note_link:
-            rel.append(wl(note_link[c["note_id"]]))
-        if rel:
-            parts += ["## Entidades relacionadas", ""] + rel + [""]
+            rel.append(vl.wl(note_link[c["note_id"]]))
 
-        write_note(vault, "cve", cve_link[c["id"]], "\n".join(parts))
+        fields = {
+            "id": c["cve_id"],
+            "title": c["title"],
+            "severity": c["severity"],
+            "cvss": c["cvss"],
+            "affected": c["affected"],
+            "description": c["description"],
+            "fecha_actualizacion": c["created_at"],
+        }
+        base, body = vl.build_cve(fields, rel)
+        vl.write_synced(vault, "cve", f"cve-{c['cve_id']}", base, body)
         counts["cve"] += 1
 
     # ── HERRAMIENTAS ──────────────────────────────────────────────────────────────
     for t in tools:
         tid = t["id"]
-        fm = frontmatter({
-            "id": f"herramienta-{tid}",
-            "tipo": "herramienta",
-            "fecha_actualizacion": to_iso(t["updated_at"] or t["created_at"]),
-        })
-        parts = [fm, "", f"# {t['name'] or f'Herramienta {tid}'}", ""]
-        if t["url"]:
-            parts += [f"**URL:** {t['url']}", ""]
-        meta = []
-        if t["category"]:
-            meta.append(f"**Categoría:** {t['category']}")
-        if t["tool_type"]:
-            meta.append(f"**Tipo:** {t['tool_type']}")
-        if meta:
-            parts += meta + [""]
-        if t["description"]:
-            parts += [t["description"], ""]
-        if t["use_cases"]:
-            parts += ["## Casos de uso", "", t["use_cases"], ""]
+        rel = [vl.wl(note_link[nid]) for nid in notes_of_tool.get(tid, []) if nid in note_link]
 
-        rel = [wl(note_link[nid]) for nid in notes_of_tool.get(tid, []) if nid in note_link]
-        if rel:
-            parts += ["## Entidades relacionadas", ""] + rel + [""]
-
-        write_note(vault, "herramienta", tool_link[tid], "\n".join(parts))
+        fields = {
+            "id": tid,
+            "name": t["name"],
+            "url": t["url"],
+            "category": t["category"],
+            "tool_type": t["tool_type"],
+            "description": t["description"],
+            "use_cases": t["use_cases"],
+            "fecha_actualizacion": t["updated_at"] or t["created_at"],
+        }
+        base, body = vl.build_herramienta(fields, rel)
+        vl.write_synced(vault, "herramienta", f"herramienta-{tid}", base, body)
         counts["herramienta"] += 1
 
     # ── TÉCNICAS MITRE ────────────────────────────────────────────────────────────
     for tid, e in mitre_by_tech.items():
-        fm = frontmatter({
-            "id": f"tecnica-mitre-{tid}",
-            "tipo": "tecnica-mitre",
-            "fecha_actualizacion": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        })
-        heading = f"{tid}" + (f" — {e['name']}" if e["name"] else "")
-        parts = [fm, "", f"# {heading}", ""]
-        if e["tactic"]:
-            parts += [f"**Táctica:** {e['tactic']}", ""]
-        parts += [f"**Ver en ATT&CK:** https://attack.mitre.org/techniques/{tid.replace('.', '/')}/", ""]
-        snippets = [s for s in e["snippets"] if s]
-        if snippets:
-            parts += ["## Contexto"]
-            for s in snippets:
-                parts += ["", f"> {s}"]
-            parts.append("")
+        rel = [vl.wl(note_link[nid]) for nid in e["note_ids"] if nid in note_link]
 
-        rel = [wl(note_link[nid]) for nid in e["note_ids"] if nid in note_link]
-        if rel:
-            parts += ["## Entidades relacionadas", ""] + rel + [""]
-
-        write_note(vault, "tecnica-mitre", mitre_link[tid], "\n".join(parts))
+        fields = {
+            "id": tid,
+            "name": e["name"],
+            "tactic": e["tactic"],
+            "snippets": e["snippets"],
+            "fecha_actualizacion": None,  # las tecnicas no tienen fecha propia en la BBDD
+        }
+        base, body = vl.build_tecnica_mitre(fields, rel)
+        vl.write_synced(vault, "tecnica-mitre", f"tecnica-mitre-{tid}", base, body)
         counts["tecnica-mitre"] += 1
 
     con.close()

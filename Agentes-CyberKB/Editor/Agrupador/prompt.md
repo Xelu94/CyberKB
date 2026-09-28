@@ -220,7 +220,8 @@ Fuera del grafo: palabras genéricas como «sistema», «red», «usuario», «s
 «datos», «seguridad», «ataque». Una entidad que no podrías buscar en Google y encontrar
 una definición concreta no es una entidad.
 
-`relations` son pares `[A, B]` de entidades **que estén en tu propia lista `entities`**.
+`relations` son pares `{"a": A, "b": B}` de entidades **que estén en tu propia lista
+`entities`**.
 Relacionas lo que el documento pone en el mismo contexto técnico: la herramienta con el
 ataque que ejecuta, el control con la amenaza que mitiga, el CVE con el producto.
 

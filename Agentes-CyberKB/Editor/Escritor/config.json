@@ -1,7 +1,7 @@
 {
   "modelo": {
-    "id": "claude-opus-5",
-    "respaldo": "claude-opus-4-8",
+    "id": "claude-sonnet-5",
+    "respaldo": null,
     "max_tokens": 16000,
     "effort": "medium"
   },

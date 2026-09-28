@@ -47,17 +47,29 @@ simplicidad y consistencia de datos.
 
 Agente-BBDD, justo después de persistir, ya tiene a mano todos los ids que acaba de
 escribir. Se los pasa explícitamente a Obsi en la llamada interna, en vez de que
-Obsi tenga que recalcular relaciones:
+Obsi tenga que recalcular relaciones.
+
+**Implementado (2026-09-28) en `agente_bbdd.py`/`_procesar()`**: la respuesta de
+Agente-BBDD ya incluye estos campos, con los mismos nombres e identificadores que
+recibirá Obsi (ver `Editor/Agente-BBDD/README.md`, sección "Salidas"):
 
 ```json
 {
-  "note_id": 123,
-  "tool_ids": [4, 7],
-  "cve_ids": [12],
-  "command_ids": [55, 56],
-  "mitre_technique_ids": ["T1059", "T1059.001"]
+  "nota_id": 123,
+  "herramientas_ids": [4, 7],
+  "comandos_ids": [55, 56],
+  "cves_ids": ["CVE-2021-44228"],
+  "mitre_ids": ["T1059", "T1059.001"]
 }
 ```
+
+Los identificadores **no son homogéneos a propósito**: `herramientas_ids` y
+`comandos_ids` son el `id` numérico de fila (`tools.id`/`commands.id`), pero
+`cves_ids` y `mitre_ids` son `cve_id`/`technique_id` (texto) — porque así es como el
+vault ya identifica a un CVE o una técnica MITRE (`migrate_to_obsidian.py` no genera
+una nota por fila para estos dos tipos, sino una por identificador único; varias
+filas pueden compartir el mismo CVE o la misma técnica). Obsi tiene que usar el tipo
+de identificador correcto según la entidad, no asumir que todos son ids numéricos.
 
 Obsi relee exactamente esas filas por id — no hace `SELECT *` de toda la tabla.
 
@@ -137,6 +149,10 @@ Obsi debe:
    existía, borrar el fichero antiguo al escribir el nuevo — nunca dejar dos notas
    para la misma entidad.
 
+**Decidido (2026-09-28): esta lógica se comparte con `migrate_to_obsidian.py`, no se
+reimplementa por separado** (cierra el punto que quedaba abierto en el §8 antiguo —
+ver más abajo, "Historial", y el nuevo §8 con el diseño concreto).
+
 ---
 
 ## 7. Manejo de fallos — fallo blando + reintento aislado desde el frontend
@@ -159,15 +175,83 @@ bien) — no tiene sentido tratarlo como si no se hubiera guardado nada.
   de respuesta de la cadena aunque Obsi haya fallado, para que el frontend los tenga
   a mano para el reintento.
 
+### Contrato de `POST /api/obsi/sync` — decidido (2026-09-28)
+
+**Entrada**: exactamente el mismo `ids_obsi` que ya devuelve/envía Agente-BBDD
+(§2, ya implementado):
+
+```json
+{
+  "nota_id": 123,
+  "herramientas_ids": [4, 7],
+  "comandos_ids": [55, 56],
+  "cves_ids": ["CVE-2021-44228"],
+  "mitre_ids": ["T1059"]
+}
+```
+
+**Salida**:
+
+```json
+{
+  "sincronizado": true,
+  "notas_creadas": ["Notas/Mi-nota.md"],
+  "notas_actualizadas": ["Herramientas/Nmap.md"],
+  "notas_borradas": ["Comandos/Comando-antiguo.md"]
+}
+```
+
+- `sincronizado`: `true`/`false` — si todo el lote se escribió sin errores de disco.
+- `notas_creadas`/`notas_actualizadas`/`notas_borradas`: rutas relativas dentro del
+  vault, para que quien llame (Agente-BBDD, o el frontend en un reintento aislado)
+  pueda mostrar o loguear qué se tocó exactamente — `notas_borradas` es la limpieza
+  de huérfanas del §6.
+- **Actualizado (2026-09-28, prompt del usuario): Obsi NO usa el `"Ha habido un
+  error"` genérico.** Cualquier error de escritura responde `500` +
+  `"El grafo no ha podido actualizarse"` — mensaje propio, porque el frontend debe
+  poder ofrecer un botón **"Reintentar"** específico para la sincronización del
+  grafo/vault, distinto del reintento de la cadena entera. Agente-BBDD, de todas
+  formas, trata cualquier fallo de este endpoint (HTTP error o timeout) como fallo
+  blando (arriba) — no le importa el texto del mensaje, solo si respondió 2xx o no.
+
 ---
 
-## 8. Sin cerrar todavía (no construir hasta decidirlo)
+## 8. Relación con `migrate_to_obsidian.py` — decidido (Opción C, 2026-09-28)
 
-- **Relación entre `migrate_to_obsidian.py` y Obsi una vez Obsi esté en
-  producción**: ¿el script pasa a ser solo backfill puntual (se ejecutó una vez,
-  no se vuelve a tocar), o se puede seguir re-ejecutando en caliente sin pisar lo
-  que Obsi ya haya escrito incrementalmente? Riesgo si se re-ejecuta: al nombrar por
-  título y no por id, podría sobreescribir o duplicar una nota que Obsi ya gestiona.
+**Ya no queda ningún punto abierto.** Se decidió la Opción C: `migrate_to_obsidian.py`
+sigue siendo re-ejecutable en caliente aunque Obsi ya esté en producción, pero
+adoptando la **misma lógica de "buscar por `id`, no por título"** que usa Obsi para
+limpiar huérfanas (§6) — así los dos son coherentes entre sí y no hay riesgo de que
+uno pise o duplique lo que escribió el otro.
+
+**Qué hace falta para esto (nuevo, no existe hoy en ningún sitio):**
+
+1. **Función de búsqueda por `id`**: recorre la subcarpeta del tipo (`Notas/`,
+   `Comandos/`, etc.), lee la línea `id: <tipo>-<id>` del frontmatter de cada `.md`
+   (no hace falta una librería YAML — el frontmatter es fijo a 3 campos, basta con
+   leer las primeras líneas) y devuelve la ruta que coincida.
+2. **Unicidad de nombre resuelta contra el disco, no en memoria**: hoy el script usa
+   un `NameAllocator` en memoria, válido solo dentro de una misma ejecución completa.
+   Pasa a comprobarse contra los ficheros que ya existen en la carpeta del tipo en
+   ese momento — mismo criterio para el script y para Obsi, da igual si uno procesa
+   toda la BBDD de golpe y el otro una entidad a la vez.
+3. **Escritura sincronizada**: antes de escribir, buscar la nota existente por `id`
+   (paso 1), calcular el nombre deseado para el título actual, y si ya existía con
+   otro nombre, borrar el fichero viejo al escribir el nuevo.
+
+**Dónde vive este código compartido — decidido: Opción 1.** Nuevo módulo
+`Agentes-CyberKB/Editor/Obsi/vault_lib.py` (junto a Obsi, no dentro del repo de la
+app), con `sanitize()`, `frontmatter()`, `to_iso()`, `parse_tags()` (migradas desde
+`scripts/migrate_to_obsidian.py`, ver §4) más las tres funciones nuevas de arriba.
+`scripts/migrate_to_obsidian.py`, que vive en el repo de la app, lo importa añadiendo
+la carpeta hermana a `sys.path` — el mismo patrón que ya usa `main.py` para importar
+los agentes, aplicado en sentido inverso (un script de la app importando algo del
+repo de agentes).
+
+**[HECHO 2026-09-28]** Construido y probado contra la BBDD real:
+`Editor/Obsi/vault_lib.py` (funciones migradas + `find_by_id`/`unique_filename`/
+`write_synced`), `scripts/migrate_to_obsidian.py` actualizado para usarlo (verificado
+idempotente: dos pasadas seguidas no duplican nada), y `Editor/Obsi/obsi.py` en sí.
 
 ---
 
