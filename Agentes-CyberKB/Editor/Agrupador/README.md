@@ -1,16 +1,19 @@
 # Agente Agrupador
 
 Descompone el resumen que produce el **Escritor** en fichas estructuradas y las entrega
-al **Agente-BBDD** y al agente **Obsi**. No resume ni filtra: toma un texto ya validado y
-lo convierte en filas de base de datos y nodos de grafo.
+al **Agente-BBDD**. No resume ni filtra: toma un texto ya validado y lo convierte en
+filas de base de datos y nodos de grafo.
 
 ```
-                                    ┌──> Agente-BBDD  (tablas)
-Escritor ──resumen──> Agrupador ────┤
-                          │         └──> Obsi         (vault de Obsidian)
+Escritor ──resumen──> Agrupador ────> Agente-BBDD  (tablas)
                           │
                           └──> agrupaciones/{id_resumen}.json
 ```
+
+**Nota (2026-09-28):** Agrupador ya no entrega directamente al agente **Obsi**. El
+pipeline se rediseñó para que Obsi corra *después* de Agente-BBDD, releyendo de SQLite
+ya confirmado, en vez de en paralelo a partir de este mismo JSON. Ver
+`Editor/Obsi/DECISIONES_OBSI.md`.
 
 ## Entradas
 
@@ -41,12 +44,11 @@ con lo mínimo cuando un envío falla.
 4. **Validar** la salida del modelo contra el modelo de datos de la app —este paso es el
    que protege la base de datos, y se detalla más abajo.
 5. **Guardar** `{id_resumen}.json` en `agrupaciones/`, dentro de la carpeta del agente.
-6. **Entregar** al Agente-BBDD y al agente Obsi. Siempre a los dos, en el mismo envío.
+6. **Entregar** al Agente-BBDD.
 
 ## Salidas
 
-Un único JSON que reciben **ambos** agentes sin diferencias. Cada uno toma lo que necesita:
-el Agente-BBDD reparte los bloques entre sus tablas, y Obsi construye la nota y sus enlaces.
+El JSON que recibe el Agente-BBDD, que reparte los bloques entre sus tablas.
 
 ```json
 {
@@ -72,8 +74,7 @@ el Agente-BBDD reparte los bloques entre sus tablas, y Obsi construye la nota y 
   "entities": [{"name": "Pass-the-Hash", "type": "attack", "description": "..."}],
   "relations": [["Mimikatz", "Pass-the-Hash"]],
 
-  "bbdd_entregado": true,
-  "obsi_entregado": true
+  "bbdd_entregado": true
 }
 ```
 
@@ -109,11 +110,10 @@ insertar sin traducir nada:
 
    El recuento ignora espacios, saltos, marcas BOM y caracteres de ancho cero: solo
    cuentan los caracteres que se ven.
-2. **El JSON va siempre a los dos agentes.** No hay ruta que entregue a uno solo. Si uno
-   de los dos no responde, la petición **no** falla: el JSON ya está en disco y la
-   respuesta lo indica con `bbdd_entregado` u `obsi_entregado` en `false`. Volver a fallar
-   la petición entera obligaría a pagar otra vez la llamada al modelo por un problema que
-   no está en la agrupación.
+2. **Si el Agente-BBDD no responde, la petición no falla.** El JSON ya está en disco y la
+   respuesta lo indica con `bbdd_entregado` en `false`. Volver a fallar la petición entera
+   obligaría a pagar otra vez la llamada al modelo por un problema que no está en la
+   agrupación.
 3. **La base de conocimiento vive en [prompt.md](prompt.md).** El vocabulario canónico
    —herramientas, protocolos, marcos, ataques, defensas, conceptos y criptografía— sale de
    la recopilación hecha sobre fuentes oficiales (NIST, OWASP, CIS, ISO, MITRE, CISA).
@@ -162,7 +162,6 @@ el mensaje de error.
 |---|---|
 | `ANTHROPIC_API_KEY` | Clave de Claude. Ya la gestiona `POST /api/settings` de la app. |
 | `BBDD_URL` | Endpoint del Agente-BBDD. Por defecto el de `config.json`. |
-| `OBSI_URL` | Endpoint del agente Obsi. Por defecto el de `config.json`. |
 | `AGRUPADOR_OUTPUT_DIR` | Carpeta de salida. Por defecto `agrupaciones/`, dentro de esta misma carpeta. |
 
 ## Integración en la app
@@ -226,4 +225,4 @@ No hay dependencias nuevas: `anthropic`, `httpx`, `fastapi` y `pydantic` ya est�
 
 ---
 
-**Versión** 1.0 · **Flujo** Escritor→Agrupador→{Agente-BBDD, Obsi}
+**Versión** 1.0 · **Flujo** Escritor→Agrupador→Agente-BBDD→Obsi

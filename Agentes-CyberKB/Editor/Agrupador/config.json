@@ -73,11 +73,6 @@
     "timeout_segundos": 60
   },
 
-  "obsi": {
-    "url": "http://localhost:8000/api/obsi/ingesta",
-    "timeout_segundos": 60
-  },
-
   "salida": {
     "directorio": "agrupaciones"
   },

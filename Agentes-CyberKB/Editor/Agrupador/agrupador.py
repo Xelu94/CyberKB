@@ -2,7 +2,7 @@
 
 Recibe el resumen que produce el agente Escritor, lo descompone en fichas
 estructuradas —herramientas, comandos, CVEs, tecnicas ATT&CK y entidades del grafo—
-y entrega el resultado al Agente-BBDD y al agente Obsi.
+y entrega el resultado al Agente-BBDD.
 
 Para engancharlo en main.py. El repositorio de agentes es hermano del de la app y su
 nombre lleva guion, asi que no se puede importar como paquete:
@@ -49,7 +49,6 @@ SALIDA_DIR = Path(
 SALIDA_DIR.mkdir(parents=True, exist_ok=True)
 
 BBDD_URL = os.getenv("BBDD_URL", CFG["bbdd"]["url"])
-OBSI_URL = os.getenv("OBSI_URL", CFG["obsi"]["url"])
 
 RE_CVE = re.compile(r"^CVE-\d{4}-\d{4,7}$", re.IGNORECASE)
 RE_MITRE = re.compile(r"^T\d{4}(\.\d{3})?$", re.IGNORECASE)
@@ -340,7 +339,6 @@ def _procesar(resumen: ResumenEscritor) -> dict:
     return {
         **payload,
         "bbdd_entregado": _entregar(BBDD_URL, CFG["bbdd"]["timeout_segundos"], payload),
-        "obsi_entregado": _entregar(OBSI_URL, CFG["obsi"]["timeout_segundos"], payload),
     }
 
 
