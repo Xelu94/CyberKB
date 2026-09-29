@@ -45,7 +45,10 @@ confunden acrónimos y no cuestan nada. La transcripción es el plan B.
 
 El JSON se escribe en `CINEFILO_OUTPUT_DIR` (por defecto `videos/`, dentro de la carpeta
 del agente) con el identificador
-del trabajo, y se devuelve en la respuesta HTTP junto a `escritor_entregado`:
+del trabajo, y se devuelve en la respuesta HTTP junto a `escritor_entregado` y
+`pdf_url` (el PDF del resumen que el Escritor ha creado en esta misma vuelta, en
+`Escritor/resumenes/`; es lo que descarga el botón "Descarga" de la app, `null` si el
+Escritor no llegó a responder):
 
 ```json
 {
@@ -62,7 +65,8 @@ del trabajo, y se devuelve en la respuesta HTTP junto a `escritor_entregado`:
   "temas": ["nis2", "cumplimiento", "respuesta-incidentes"],
   "certeza_clasificacion": 0.96,
   "motivo_clasificacion": "Charla sobre plazos de notificacion y organos competentes bajo NIS2.",
-  "escritor_entregado": true
+  "escritor_entregado": true,
+  "pdf_url": "/api/escritor/pdf/9f3c..."
 }
 ```
 
@@ -91,7 +95,7 @@ Cualquier otro fallo durante el proceso responde `500` con
 
 Que el Escritor esté caído —o que rechace el texto por quedarse corto— no se considera un
 error del Cinéfilo: el JSON ya existe en disco, así que la respuesta llega con
-`escritor_entregado: false` en lugar de fallar.
+`escritor_entregado: false` (y `pdf_url: null`) en lugar de fallar.
 
 ## Configuración
 

@@ -28,6 +28,20 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# Claude Code (sesión/config local)
+.claude/
+
+# Backups de la BBDD (la BBDD viva ya está ignorada arriba)
+data/*.backup*
+data/*.db.backup*
+
+# Vault (salida de Obsidian): mantener solo el árbol de carpetas y su README,
+# nunca las notas personales generadas dentro.
+vault/**
+!vault/**/
+!vault/**/.gitkeep
+!vault/README.md
 *.swp
 
 # Compiled EXE (too large for GitHub)

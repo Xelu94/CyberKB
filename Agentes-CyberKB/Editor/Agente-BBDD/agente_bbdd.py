@@ -456,7 +456,15 @@ def _entregar_obsi(payload: dict) -> bool:
 # ----------------------------------------------------------------- orquestacion
 
 
+try:
+    import progreso  # progreso en vivo del pipeline (opcional: solo dentro de la app)
+except Exception:
+    progreso = None
+
+
 def _procesar(datos: Agrupacion) -> dict:
+    if progreso:
+        progreso.set_paso("bbdd")
     db = SessionLocal()
     try:
         nota = _nota(db, datos)

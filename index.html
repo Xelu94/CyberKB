@@ -26,7 +26,8 @@ a{color:var(--blue);text-decoration:none;}a:hover{text-decoration:underline;}
 /* TOPBAR */
 .topbar{display:flex;align-items:center;padding:0 14px;height:46px;background:var(--bg2);border-bottom:1px solid var(--border2);gap:10px;flex-shrink:0;position:relative;}
 .topbar::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--green),transparent);opacity:.4;}
-.logo{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--green);letter-spacing:2px;white-space:nowrap;text-shadow:0 0 20px rgba(0,255,136,.3);}
+.logo{font-family:var(--mono);font-size:14px;font-weight:700;color:var(--green);letter-spacing:2px;white-space:nowrap;text-shadow:0 0 20px rgba(0,255,136,.3);cursor:pointer;user-select:none;}
+.logo:hover{opacity:.85;}
 .logo span{color:var(--cyan);}
 .logo sub{color:var(--text3);font-size:9px;}
 .stat-pill{display:flex;align-items:center;gap:5px;padding:3px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:20px;font-size:10px;font-family:var(--mono);color:var(--text3);}
@@ -484,7 +485,7 @@ tr.svc-open-row td{background:rgba(0,170,255,.08);}
 
 <!-- TOPBAR -->
 <div class="topbar">
-  <div class="logo">⬡ CYBER<span>KB</span> <sub>v5.6</sub></div>
+  <div class="logo" onclick="newNote()" title="Ir al editor" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' ')newNote()">⬡ CYBER<span>KB</span> <sub>v5.6</sub></div>
   <div class="stat-pill"><b id="stNotes">0</b> notas</div>
   <div class="stat-pill"><b id="stTools">0</b> tools</div>
   <div class="stat-pill"><b id="stCmds">0</b> cmds</div>
@@ -539,34 +540,133 @@ tr.svc-open-row td{background:rgba(0,170,255,.08);}
 
   <!-- EDITOR PANEL -->
   <div class="panel show" id="panel-editor">
-    <div class="ed-toolbar">
-      <input class="ed-title" id="noteTitle" type="text" placeholder="Título de la nota..." autocomplete="off">
-      <select class="sel" id="noteCat">
-        <option value="reconocimiento">Reconocimiento</option>
-        <option value="enumeracion">Enumeración</option>
-        <option value="explotacion">Explotación</option>
-        <option value="post-explotacion">Post-Explotación</option>
-        <option value="web-hacking">Web Hacking</option>
-        <option value="redes">Redes</option>
-        <option value="criptografia">Criptografía</option>
-        <option value="forense">Forense</option>
-        <option value="malware">Malware</option>
-        <option value="osint">OSINT</option>
-        <option value="ingenieria-social">Ing. Social</option>
-        <option value="herramienta">Herramienta</option>
-        <option value="comandos">Comandos</option>
-        <option value="vulnerabilidad">Vulnerabilidad</option>
-        <option value="metodologia">Metodología</option>
-        <option value="teoria" selected>Teoría</option>
-      </select>
-      <input class="tags-in" id="noteTags" type="text" placeholder="tags: nmap, xss..." autocomplete="off">
-      <button class="btn-ai" id="btnAnalyze" onclick="analyzeNote()">✦ Analizar</button>
-      <button class="btn-green" onclick="saveNote()">Guardar</button>
-      <button class="btn-outline" onclick="newNote()">+ Nueva</button>
-      <button class="btn-danger" id="btnDel" style="display:none" onclick="deleteNote()">✕</button>
-    </div>
     <div class="ed-body">
-      <textarea class="ed-textarea" id="noteContent" placeholder="Escribe, pega o arrastra un documento aquí...
+
+      <!-- Cabecera plegable: solo aparece al ver una nota; pliega/despliega la entrada
+           (instrucciones + tarjeta de vídeo/BETA + zona de soltar) para no tapar la nota. -->
+      <div id="edEntradaBar" onclick="_edToggleEntrada()" style="display:none;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border2);border-radius:var(--r2);background:var(--bg2);cursor:pointer;user-select:none;">
+        <span id="edEntradaChevron" style="font-size:11px;color:var(--text2);width:12px;text-align:center;">▸</span>
+        <span style="font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;font-family:var(--mono);color:var(--text2);">Nueva entrada</span>
+        <span style="flex:1;"></span>
+        <span style="font-size:10px;font-family:var(--mono);color:var(--text3);">vídeo · documento · apuntes</span>
+      </div>
+
+      <div id="edInicialInstrucciones" style="background:var(--bg3);border:1px solid var(--border2);border-left:3px solid var(--purple);border-radius:var(--r2);padding:14px 18px;user-select:none;cursor:default;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:10px;font-weight:700;color:var(--purple);letter-spacing:2px;text-transform:uppercase;font-family:var(--mono);">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--purple);display:inline-block;"></span>INSTRUCCIONES
+        </div>
+        <div style="margin-bottom:12px;">
+          <div style="font-size:9px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:2px;margin-bottom:5px;font-family:var(--mono);">Qué hace</div>
+          <div style="font-size:12.5px;line-height:1.7;color:var(--text);">Esta herramienta te permitirá generar resúmenes a través de un vídeo o tus
+          propios apuntes. La IA irá registrando lo que vayas guardando y te responderá adecuadamente.</div>
+        </div>
+        <div style="margin-bottom:12px;">
+          <div style="font-size:9px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:2px;margin-bottom:5px;font-family:var(--mono);">Requisito de longitud</div>
+          <div style="font-size:12.5px;line-height:1.7;color:var(--text);">Para pasar tus apuntes tendrás que pasarlo por documentos suficientemente
+          largos, si no la app te lo hará saber.</div>
+        </div>
+        <div>
+          <div style="font-size:9px;font-weight:700;color:var(--cyan);text-transform:uppercase;letter-spacing:2px;margin-bottom:5px;font-family:var(--mono);">Ejemplos de contenido</div>
+          <div style="font-size:12.5px;line-height:1.85;color:var(--text);">
+            <div>→ Apuntes de clase sobre técnicas de reconocimiento</div>
+            <div>→ Vídeo sobre el funcionamiento de IA en ciberseguridad</div>
+            <div>→ CVE-2021-44228 - Log4Shell RCE</div>
+            <div>→ Herramienta: Burp Suite — proxy web</div>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:8px;">La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automáticamente.</div>
+        </div>
+      </div>
+
+      <div class="ed-toolbar" id="edToolbar" style="border:1px solid var(--border2);border-radius:var(--r2);">
+        <input class="ed-title" id="noteTitle" type="text" placeholder="Para apuntes cortos o específicos." autocomplete="off">
+        <select class="sel" id="noteCat" style="display:none">
+          <option value="reconocimiento">Reconocimiento</option>
+          <option value="enumeracion">Enumeración</option>
+          <option value="explotacion">Explotación</option>
+          <option value="post-explotacion">Post-Explotación</option>
+          <option value="web-hacking">Web Hacking</option>
+          <option value="redes">Redes</option>
+          <option value="criptografia">Criptografía</option>
+          <option value="forense">Forense</option>
+          <option value="malware">Malware</option>
+          <option value="osint">OSINT</option>
+          <option value="ingenieria-social">Ing. Social</option>
+          <option value="herramienta">Herramienta</option>
+          <option value="comandos">Comandos</option>
+          <option value="vulnerabilidad">Vulnerabilidad</option>
+          <option value="metodologia">Metodología</option>
+          <option value="teoria" selected>Teoría</option>
+        </select>
+        <input class="tags-in" id="noteTags" type="text" style="display:none" placeholder="tags: nmap, xss..." autocomplete="off">
+        <button class="btn-ai" id="btnAnalyze" onclick="analyzeNote()">✦ Analizar</button>
+        <button class="btn-outline" style="display:none" onclick="newNote()">+ Nueva</button>
+        <button id="btnDownloadNote" style="display:none;background:var(--green);border:none;color:#000;font-weight:700;font-size:11px;padding:5px 12px;border-radius:var(--r);cursor:pointer;font-family:var(--mono);" onclick="downloadNoteFile()">⬇ Descargar</button>
+        <button class="btn-danger" id="btnDel" style="display:none" onclick="deleteNote()">✕</button>
+      </div>
+
+      <div id="edSourceCard" style="padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r2);background:var(--bg2);user-select:none;cursor:default;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:15px;">🎬</span>
+          <input id="edVideoUrl" type="text" oninput="if(_edState==='hecho')_edPreview('inicial')" placeholder="Pega una URL de YouTube / Vimeo..." style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--r);padding:7px 12px;font-size:13px;font-family:var(--mono);outline:none;user-select:text;cursor:text;">
+          <span style="font-size:8px;color:var(--orange);border:1px solid rgba(255,102,0,.4);border-radius:8px;padding:1px 4px;font-family:var(--mono);" title="Usa OPENAI_API_KEY y ANTHROPIC_API_KEY">API</span>
+          <span style="font-size:8px;color:var(--orange);border:1px solid rgba(255,102,0,.4);border-radius:8px;padding:1px 4px;font-family:var(--mono);" title="Función en fase beta">BETA</span>
+          <button id="edSourceBtn" onclick="_edSourceClick()" style="background:linear-gradient(135deg,var(--purple),var(--blue));border:none;color:#fff;font-weight:700;font-size:10px;padding:4px 10px;border-radius:var(--r);font-family:var(--mono);cursor:pointer;">▶ Transcribir</button>
+        </div>
+        <div id="edBetaNote" style="margin-top:20px;font-size:14px;font-family:var(--mono);color:#7a9ab5;">Función en BETA, se recomienda que los vídeos tengan subtítulos oficiales, se está trabajando para que no haya errores a través de una API de OpenAI.</div>
+      </div>
+
+      <div id="edDocCard" style="display:none;align-items:center;gap:8px;padding:9px 12px;border:1px solid var(--border2);border-radius:var(--r2);background:var(--bg2);user-select:none;cursor:default;">
+        <span style="font-size:15px;">📄</span>
+        <span id="edDocName" style="flex:1;min-width:0;background:var(--bg3);border:1px solid var(--border2);color:var(--text);border-radius:var(--r);padding:7px 12px;font-size:13px;font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">documento</span>
+        <button id="edDocBack" onclick="_edPreview('inicial')" style="display:none;background:var(--green);border:none;color:#000;font-weight:700;font-size:10px;padding:4px 10px;border-radius:var(--r);font-family:var(--mono);cursor:pointer;">← Volver</button>
+      </div>
+
+      <div id="edPipeSteps"></div>
+
+      <div id="edDoneCard" style="display:none;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--r2);padding:20px 18px;flex-direction:column;align-items:center;gap:14px;text-align:center;user-select:none;cursor:default;">
+        <div style="font-size:14px;font-family:var(--mono);color:var(--text);">Todo se ha hecho con éxito. Pulsa este botón para descargar el resumen.</div>
+        <button id="edDownloadBtn" onclick="downloadResumen()" style="background:var(--green);border:none;color:#000;font-weight:700;font-size:11px;padding:7px 16px;border-radius:var(--r);font-family:var(--mono);cursor:pointer;">Descarga</button>
+      </div>
+
+      <div id="edErrCard" style="display:none;background:var(--bg3);border:1px solid rgba(255,51,68,.35);border-left:3px solid var(--red);border-radius:var(--r2);padding:16px 18px;align-items:center;gap:14px;user-select:none;cursor:default;">
+        <span style="font-size:22px;">⚠</span>
+        <div style="flex:1;">
+          <div id="edErrTitle" style="font-size:10px;font-weight:700;color:var(--red);letter-spacing:2px;text-transform:uppercase;font-family:var(--mono);margin-bottom:4px;">Fallo en el resumen (agente Escritor)</div>
+          <div id="edErrMsg" style="font-size:13px;font-family:var(--mono);color:var(--text);">Ha pasado algo, vuelve a intentarlo.</div>
+        </div>
+        <button onclick="_edRetry()" style="background:var(--green);border:none;color:#000;font-weight:700;font-size:11px;padding:7px 16px;border-radius:var(--r);font-family:var(--mono);cursor:pointer;">↺ Reintentar</button>
+      </div>
+
+      <div id="edErrInfoCard" style="display:none;background:var(--bg3);border:1px solid var(--border2);border-left:3px solid var(--border2);border-radius:var(--r2);padding:16px 18px;align-items:center;gap:14px;user-select:none;cursor:default;">
+        <span style="font-size:22px;color:var(--text3);">ℹ</span>
+        <div style="flex:1;">
+          <div style="font-size:10px;font-weight:700;color:var(--text2);letter-spacing:2px;text-transform:uppercase;font-family:var(--mono);margin-bottom:4px;">Por qué el fallo se ve aquí</div>
+          <div style="font-size:13px;font-family:var(--mono);color:var(--text);">BBDD y Obsidian degradan en silencio — solo Cinéfilo o Escritor rompen la cadena así.</div>
+        </div>
+      </div>
+
+      <div id="edWarnCard" style="display:none;background:var(--bg3);border:1px solid rgba(255,102,0,.35);border-left:3px solid var(--orange);border-radius:var(--r2);padding:16px 18px;align-items:center;gap:14px;user-select:none;cursor:default;">
+        <span style="font-size:22px;">⚠</span>
+        <div style="flex:1;">
+          <div style="font-size:10px;font-weight:700;color:var(--orange);letter-spacing:2px;text-transform:uppercase;font-family:var(--mono);margin-bottom:4px;">Sincronización con Obsidian fallida (agente Obsi)</div>
+          <div style="font-size:13px;font-family:var(--mono);color:var(--text);">El grafo no ha podido actualizarse.</div>
+        </div>
+        <button onclick="_edRetryObsi()" style="background:var(--orange);border:none;color:#000;font-weight:700;font-size:11px;padding:7px 16px;border-radius:var(--r);font-family:var(--mono);cursor:pointer;">↺ Reintentar</button>
+      </div>
+
+      <div id="edWarnInfoCard" style="display:none;background:var(--bg3);border:1px solid var(--border2);border-left:3px solid var(--border2);border-radius:var(--r2);padding:16px 18px;align-items:center;gap:14px;user-select:none;cursor:default;">
+        <span style="font-size:22px;color:var(--text3);">ℹ</span>
+        <div style="flex:1;">
+          <div style="font-size:10px;font-weight:700;color:var(--text2);letter-spacing:2px;text-transform:uppercase;font-family:var(--mono);margin-bottom:4px;">Por qué solo esto pide reintentar</div>
+          <div style="font-size:13px;font-family:var(--mono);color:var(--text);">La nota, los comandos, los CVEs y las herramientas ya están guardados en la base de datos — Agente-BBDD terminó bien. Solo falló el eslabón siguiente, Obsi, al copiar esto al vault. Este botón reintenta únicamente esa sincronización (llama solo a Obsi con los ids ya guardados), sin repetir Cinéfilo, Escritor, el Agrupador ni Agente-BBDD.</div>
+        </div>
+      </div>
+
+      <div id="edManualArea">
+        <!-- Oculto a propósito: sigue siendo el campo real que usa loadNote() para
+             mostrar el contenido de una nota existente y analyzeNote() para leer
+             texto manual — solo se quita de la vista, no del DOM/JS. -->
+        <textarea class="ed-textarea" id="noteContent" style="display:none" placeholder="Escribe, pega o arrastra un documento aquí...
 
 Ejemplos de contenido:
   → Apuntes de clase sobre técnicas de reconocimiento
@@ -575,11 +675,12 @@ Ejemplos de contenido:
   → Herramienta: Burp Suite — proxy web
 
 La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automáticamente."></textarea>
-      <div class="drop-zone" id="dropZone" onclick="document.getElementById('docInput').click()" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFile(event)">
-        <input type="file" id="docInput" accept=".pdf,.odt,.txt,.md,.log" onchange="uploadFile(this.files[0])">
-        <div class="dz-icon">📄</div>
-        <div>Arrastra o haz clic para subir un documento</div>
-        <div class="dz-note">.pdf  .odt  .txt  .md — Claude analizará y clasificará el contenido</div>
+        <div class="drop-zone" id="dropZone" onclick="document.getElementById('docInput').click()" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropDocPipeline(event)">
+          <input type="file" id="docInput" accept=".pdf,.odt,.docx,.html,.htm,.txt,.md,.log" onchange="uploadDocPipeline(this.files[0])">
+          <div class="dz-icon">📄</div>
+          <div>Arrastra o haz clic para subir un documento</div>
+          <div class="dz-note">.pdf  .odt  .docx  .html  .txt  .md — Claude analizará y clasificará el contenido</div>
+        </div>
       </div>
       <div class="ai-card" id="aiCard">
         <div class="ai-card-hd">
@@ -1521,12 +1622,12 @@ EXEC xp_cmdshell 'whoami';</pre>
 <div class="overlay" id="uploadModal">
   <div class="modal">
     <h3>⊕ Subir Documento</h3>
-    <p>Sube un archivo .pdf, .odt, .txt o .md. Pasa por la cadena de agentes (Escritor → Agrupador → BBDD → Obsidian), que lo clasifica, extrae herramientas/comandos/CVEs y lo guarda automáticamente si es contenido válido.</p>
+    <p>Sube un archivo .pdf, .odt, .docx, .html, .txt o .md. Pasa por la cadena de agentes (Escritor → Agrupador → BBDD → Obsidian), que lo clasifica, extrae herramientas/comandos/CVEs y lo guarda automáticamente si es contenido válido.</p>
     <div class="drop-zone" id="modalDrop" onclick="document.getElementById('modalFile').click()" ondragover="dragOver(event)" ondragleave="dragLeave(event)" ondrop="dropFile(event,true)">
-      <input type="file" id="modalFile" accept=".pdf,.odt,.txt,.md,.log" onchange="uploadFile(this.files[0],true)">
+      <input type="file" id="modalFile" accept=".pdf,.odt,.docx,.html,.htm,.txt,.md,.log" onchange="uploadFile(this.files[0],true)">
       <div class="dz-icon">📤</div>
       <div id="modalDropLabel">Seleccionar archivo</div>
-      <div class="dz-note">.pdf  .odt  .txt  .md  .log</div>
+      <div class="dz-note">.pdf  .odt  .docx  .html  .txt  .md  .log</div>
     </div>
     <div class="upload-progress" id="uploadProgress">
       <div class="upload-progress-label" id="uploadProgressLabel">⏳ Extrayendo texto y analizando con IA...</div>
@@ -2053,8 +2154,318 @@ function newNote(){
   document.getElementById('noteTags').value='';
   document.getElementById('aiCard').classList.remove('show');
   document.getElementById('btnDel').style.display='none';
+  document.getElementById('btnDownloadNote').style.display='none';
   document.getElementById('noteTitle').focus();
   switchTab('editor');
+  // Volver a modo "crear nueva": entrada desplegada, sin cabecera plegable.
+  _edPreview('inicial');
+}
+
+// Tira de pasos del pipeline de agentes en el Editor (Cinéfilo/Escritor/
+// Agrupador/BBDD/Obsi). _edStep pinta un paso; _edPreview fija el estado visible.
+function _edStep(label,state){
+  const icon={done:'✓',active:'⟳',pending:'·',error:'✕',warn:'⚠'}[state];
+  const color={done:'var(--green)',active:'var(--purple)',pending:'var(--border)',error:'var(--red)',warn:'var(--orange)'}[state];
+  const textColor=(state==='pending')?'var(--text3)':color;
+  const bg=(state==='error')?'rgba(255,51,68,.1)':(state==='warn')?'rgba(255,102,0,.1)':'var(--bg3)';
+  return `<div style="display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:var(--r);background:${bg};border:1px solid ${color};${state==='pending'?'opacity:.4;':''}">
+    <span style="font-size:14px;width:16px;text-align:center;color:${textColor};">${icon}</span><span style="font-size:10.5px;font-family:var(--mono);color:${textColor};">${esc(label)}</span>
+  </div>`;
+}
+function _edArrow(){return `<div style="color:var(--text3);font-size:13px;">→</div>`;}
+// Fija el estado visible del Editor (inicial / curso / error / aviso / hecho).
+// Lo llaman transcribeVideo() y uploadDocPipeline() con o = {kind, live, filename,
+// failAt, errTitle, errMsg}:
+//   kind   → 'video' (5 pasos, con Cinéfilo) | 'doc' (4 pasos, empieza en Escritor).
+//   live   → "En curso" real: primer paso activo, resto pendiente, barra indeterminada
+//            (la cadena es una sola petición síncrona, no hay progreso real por pasos).
+//   failAt → índice del paso que falló en "error" (vídeo: 0 Cinéfilo, 1 Escritor; doc: 0 Escritor).
+const _ED_STEPS=['Viendo peli..','Resumiendo..','Buscando..','Repartiendo a BBDD','Pasando al grafo'];
+let _edState='inicial';
+let _edKind='video';      // 'video' (Cinéfilo→…) | 'doc' (zona de soltar, empieza en Escritor)
+// Etiquetas de los pasos según el origen: el documento no pasa por Cinéfilo,
+// así que se salta "Viendo peli.." y empieza directo en "Resumiendo..".
+function _edLabels(kind){ return kind==='doc'?_ED_STEPS.slice(1):_ED_STEPS; }
+function _edStepsRow(labels,states,allArrows=false){
+  // Flecha entre pasos; en "En curso"/"Error" el mockup no la pone antes del último.
+  return states.map((s,i)=>_edStep(labels[i],s)+(i<states.length-1&&(allArrows||i<labels.length-2)?_edArrow():'')).join('');
+}
+// Ids de paso que devuelve el backend (GET /api/progress), en el mismo orden que las
+// etiquetas. El documento no pasa por Cinéfilo, así que su primer paso es Escritor.
+const _ED_PASO_IDS=['cinefilo','escritor','agrupador','bbdd','obsi'];
+function _edPasoIds(kind){ return kind==='doc'?_ED_PASO_IDS.slice(1):_ED_PASO_IDS; }
+// Repinta la tira de "En curso" con el paso activeIdx en marcha y los previos hechos.
+function _edSetCursoPaso(kind,activeIdx){
+  const el=document.getElementById('edCursoSteps');
+  if(!el) return;
+  const labels=_edLabels(kind);
+  const states=labels.map((_,i)=>i<activeIdx?'done':i===activeIdx?'active':'pending');
+  el.innerHTML=_edStepsRow(labels,states);
+}
+// Sondea GET /api/progress mientras dura la petición y adelanta la tira de pasos
+// según el agente que esté trabajando. Devuelve una función para detenerlo.
+function _edStartProgressPoll(kind){
+  const ids=_edPasoIds(kind);
+  let stopped=false;
+  (async()=>{
+    while(!stopped){
+      await new Promise(r=>setTimeout(r,800));
+      if(stopped) break;
+      try{
+        const p=await API.get('/api/progress');
+        if(!stopped&&p&&p.paso&&_edState==='curso'){
+          const idx=ids.indexOf(p.paso);
+          if(idx>=0) _edSetCursoPaso(kind,idx);
+        }
+      }catch(_){}
+    }
+  })();
+  return ()=>{stopped=true;};
+}
+// Plegado de la "entrada" (instrucciones + tarjeta de vídeo/BETA + zona de soltar).
+// Solo se usa al ver una nota; la cabecera edEntradaBar aparece entonces.
+let _edEntradaColapsada=false;
+function _edToggleEntrada(force){
+  _edEntradaColapsada=(force===undefined)?!_edEntradaColapsada:!!force;
+  const show=!_edEntradaColapsada;
+  document.getElementById('edInicialInstrucciones').style.display=show?'block':'none';
+  document.getElementById('edSourceCard').style.display=show?'':'none';
+  document.getElementById('edManualArea').style.display=show?'block':'none';
+  document.getElementById('edEntradaChevron').textContent=show?'▾':'▸';
+}
+// Borra la tira de pipeline y oculta todas las tarjetas de resultado/estado.
+function _edClearPipeline(){
+  document.getElementById('edPipeSteps').innerHTML='';
+  ['edDoneCard','edErrCard','edErrInfoCard','edWarnCard','edWarnInfoCard','edDocCard']
+    .forEach(id=>document.getElementById(id).style.display='none');
+}
+
+function _edPreview(name,o={}){
+  _edState=name;
+  const kind=o.kind||'video';
+  _edKind=kind;
+  // El plegado y el botón de descargar nota son solo para ver notas; cualquier
+  // estado del pipeline (crear nueva) los desactiva.
+  document.getElementById('edEntradaBar').style.display='none';
+  document.getElementById('btnDownloadNote').style.display='none';
+  _edEntradaColapsada=false;
+  const busy=(name==='curso'&&o.live);
+  document.getElementById('edVideoUrl').disabled=busy;
+  document.getElementById('edSourceBtn').disabled=busy;
+  document.getElementById('edSourceBtn').style.opacity=busy?'.5':'';
+  const instr=document.getElementById('edInicialInstrucciones'),
+        manual=document.getElementById('edManualArea'),
+        pipe=document.getElementById('edPipeSteps'),
+        err=document.getElementById('edErrCard'),errInfo=document.getElementById('edErrInfoCard'),
+        warn=document.getElementById('edWarnCard'),warnInfo=document.getElementById('edWarnInfoCard'),
+        srcCard=document.getElementById('edSourceCard'),docCard=document.getElementById('edDocCard'),
+        docBack=document.getElementById('edDocBack'),
+        srcBtn=document.getElementById('edSourceBtn'),beta=document.getElementById('edBetaNote');
+  const labels=_edLabels(kind);
+  pipe.innerHTML='';
+  err.style.display='none';errInfo.style.display='none';
+  warn.style.display='none';warnInfo.style.display='none';
+  document.getElementById('edDoneCard').style.display='none';
+  instr.style.display='none';manual.style.display='none';beta.style.display='block';
+  document.getElementById('edToolbar').style.display='none';
+  docBack.style.display='none';
+  srcBtn.textContent='▶ Transcribir';
+  srcBtn.style.background='linear-gradient(135deg,var(--purple),var(--blue))';
+  srcBtn.style.color='#fff';
+  if(name==='inicial'){
+    srcCard.style.display='';docCard.style.display='none';
+    instr.style.display='block';manual.style.display='block';
+    document.getElementById('edToolbar').style.display='flex';
+    return;
+  }
+  // Fuera de "inicial": la tarjeta de origen depende del tipo (vídeo o documento).
+  if(kind==='doc'){
+    srcCard.style.display='none';docCard.style.display='flex';
+    document.getElementById('edDocName').textContent=o.filename||'documento';
+  }else{
+    srcCard.style.display='';docCard.style.display='none';
+  }
+  if(name==='curso'){
+    // "En curso" siempre en vivo (lo lanzan transcribeVideo/uploadDocPipeline):
+    // primer paso activo, resto pendiente, barra indeterminada.
+    const states=['active',...Array(labels.length-1).fill('pending')];
+    pipe.innerHTML=`<div style="padding:10px 14px;border:1px solid var(--border2);border-radius:var(--r2);background:var(--bg2);">
+      <div id="edCursoSteps" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">${_edStepsRow(labels,states)}</div>
+      <div style="height:3px;background:var(--bg4);border-radius:2px;overflow:hidden;margin-top:9px;"><div class="upload-progress-fill indeterminate"></div></div>
+      <div style="margin-top:20px;font-size:14px;font-family:var(--mono);color:#7a9ab5;">Esto puede tardar unos minutos.</div>
+    </div>`;
+    beta.style.display='none';
+  }else if(name==='error'){
+    if(kind==='doc'){docBack.style.display='inline-block';}
+    else{srcBtn.textContent='← Volver';srcBtn.style.background='var(--green)';srcBtn.style.color='#000';}
+    const failAt=(o.failAt===undefined)?1:o.failAt;
+    // Hasta 4 pasos, como en el mockup (lo que queda tras el fallo no llega a pintarse entero).
+    const cap=Math.min(labels.length,4);
+    const states=Array.from({length:cap},(_,i)=>i<failAt?'done':i===failAt?'error':'pending');
+    pipe.innerHTML=`<div style="padding:10px 14px;border:1px solid rgba(255,51,68,.35);border-radius:var(--r2);background:var(--bg2);">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">${_edStepsRow(labels,states)}</div>
+    </div>`;
+    document.getElementById('edErrTitle').textContent=o.errTitle||'Fallo en el resumen (agente Escritor)';
+    document.getElementById('edErrMsg').textContent=o.errMsg||'Ha pasado algo, vuelve a intentarlo.';
+    err.style.display='flex';errInfo.style.display='flex';
+    beta.style.display='none';
+  }else if(name==='hecho'){
+    // Sin artboard propio en el mockup: es "Aviso" sin el paso en naranja ni las tarjetas.
+    if(kind==='doc'){docBack.style.display='inline-block';}
+    else{srcBtn.textContent='✓ Transcrito';srcBtn.style.background='var(--bg4)';srcBtn.style.color='var(--text3)';}
+    const done=Array(labels.length).fill('done');
+    pipe.innerHTML=`<div style="padding:10px 14px;border:1px solid var(--border2);border-radius:var(--r2);background:var(--bg2);">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">${_edStepsRow(labels,done,true)}</div>
+    </div>`;
+    document.getElementById('edDoneCard').style.display='flex';
+    beta.style.display='none';
+  }else if(name==='aviso'){
+    // Cadena completada, pero Obsi (último paso) no sincronizó: todo en verde
+    // salvo "Pasando al grafo" en naranja, más las dos tarjetas de aviso.
+    if(kind==='doc'){docBack.style.display='inline-block';}
+    else{srcBtn.textContent='✓ Transcrito';srcBtn.style.background='var(--bg4)';srcBtn.style.color='var(--text3)';}
+    const states=labels.map((_,i)=>i===labels.length-1?'warn':'done');
+    pipe.innerHTML=`<div style="padding:10px 14px;border:1px solid var(--border2);border-radius:var(--r2);background:var(--bg2);">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">${_edStepsRow(labels,states,true)}</div>
+    </div>`;
+    warn.style.display='flex';warnInfo.style.display='flex';
+    beta.style.display='none';
+  }
+}
+document.addEventListener('DOMContentLoaded',()=>_edPreview('inicial'));
+
+// Botón de la tarjeta de vídeo: cambia de papel según el estado.
+function _edSourceClick(){
+  if(_edState==='error'){_edPreview('inicial');return;}   // "← Volver"
+  if(_edState==='hecho'||_edState==='aviso') return;       // "✓ Transcrito", atenuado
+  transcribeVideo();
+}
+
+// Vídeo → Cinéfilo (/api/cinefilo/transcribir), que encadena Escritor → Agrupador →
+// Agente-BBDD → Obsi en la misma petición. La respuesta solo dice si el Escritor
+// recibió el texto (escritor_entregado); lo que pase después no llega aquí todavía.
+// PDF del resumen que el Escritor ha creado en ESTA vuelta de los agentes
+// (Escritor/resumenes/<id>.pdf, servido por /api/escritor/pdf/<id>).
+let _edPdfUrl=null;
+let _edObsiIds=null;   // ids que devuelve Agente-BBDD, para reintentar solo Obsi
+// Descarga el resumen de la nota seleccionada como PDF (se genera al vuelo en el
+// backend desde el contenido de la nota: GET /api/notes/<id>/pdf).
+function downloadNoteFile(){
+  if(!S.currentNote){setStatus('No hay nota seleccionada','warn');return;}
+  const a=document.createElement('a');
+  a.href='/api/notes/'+S.currentNote.id+'/pdf';a.download='';
+  document.body.appendChild(a);a.click();a.remove();
+}
+
+function downloadResumen(){
+  if(!_edPdfUrl){setStatus('No hay resumen de esta vuelta para descargar','warn');return;}
+  const a=document.createElement('a');
+  a.href=_edPdfUrl;a.download='';
+  document.body.appendChild(a);a.click();a.remove();
+}
+
+async function transcribeVideo(){
+  const url=document.getElementById('edVideoUrl').value.trim();
+  if(!url){setStatus('Pega la URL de un vídeo antes de transcribir','warn');return;}
+  _edPdfUrl=null;
+  document.getElementById('aiCard').classList.remove('show');  // limpia una nota que se estuviera viendo
+  _edPreview('curso',{live:true});
+  const stopPoll=_edStartProgressPoll('video');
+  try{
+    const res=await API.post('/api/cinefilo/transcribir',{url});
+    stopPoll();
+    _edPdfUrl=res.pdf_url||null;
+    _edObsiIds=res.obsi_ids||null;
+    if(res.escritor_entregado){
+      await loadAll();
+      // Cadena completada: si Obsi no sincronizó, "aviso"; si todo bien, "hecho".
+      if(res.obsi_entregado===false){
+        _edPreview('aviso');
+        setStatus('Vídeo procesado, pero Obsidian no sincronizó','warn');
+      }else{
+        _edPreview('hecho');
+        setStatus('Vídeo procesado — '+(res.titulo||url));
+      }
+    }else{
+      _edPreview('error',{failAt:1,errTitle:'Fallo en el resumen (agente Escritor)'});
+    }
+  }catch(e){
+    stopPoll();
+    // API.post lanza el cuerpo de la respuesta tal cual: {"detail":"..."} de FastAPI.
+    let msg='Ha pasado algo, vuelve a intentarlo.';
+    try{msg=JSON.parse(e.message).detail||msg;}catch(_){}
+    _edPreview('error',{failAt:0,errTitle:'Fallo en la transcripción (agente Cinéfilo)',errMsg:msg});
+  }
+}
+
+// Documento (zona de soltar del Editor) → /api/upload, que arranca en Escritor y encadena
+// Agrupador → Agente-BBDD → Obsi. No pasa por Cinéfilo, así que el pipeline muestra 4 pasos.
+let _edLastDoc=null;
+function dropDocPipeline(e){
+  e.preventDefault();e.currentTarget.classList.remove('drag');
+  const f=e.dataTransfer.files[0];
+  if(f) uploadDocPipeline(f);
+}
+async function uploadDocPipeline(file){
+  if(!file) return;
+  _edLastDoc=file;_edPdfUrl=null;
+  document.getElementById('aiCard').classList.remove('show');  // limpia una nota que se estuviera viendo
+  _edPreview('curso',{live:true,kind:'doc',filename:file.name});
+  const stopPoll=_edStartProgressPoll('doc');
+  const fd=new FormData();fd.append('file',file);
+  try{
+    const r=await fetch('/api/upload',{method:'POST',body:fd});
+    stopPoll();
+    if(!r.ok) throw new Error(await r.text());
+    const data=await r.json();
+    _edPdfUrl=(data.escritor||{}).pdf_url||null;
+    _edObsiIds=(data.escritor||{}).obsi_ids||null;
+    const n=data.note;
+    if(n){
+      S.graphData=null;
+      await loadAll();
+      // Cadena completada: si Obsi no sincronizó, "aviso"; si todo bien, "hecho".
+      if((data.escritor||{}).obsi_entregado===false){
+        _edPreview('aviso',{kind:'doc',filename:file.name});
+        setStatus('Documento procesado, pero Obsidian no sincronizó','warn');
+      }else{
+        _edPreview('hecho',{kind:'doc',filename:file.name});
+        setStatus('Documento procesado — '+(n.tools||[]).length+' tools, '+(n.commands||[]).length+' comandos');
+      }
+    }else{
+      _edPreview('error',{kind:'doc',filename:file.name,failAt:0,
+        errTitle:'Documento procesado pero no guardado',
+        errMsg:'La cadena no confirmó el guardado (¿no era ciberseguridad, o falló algún paso?).'});
+    }
+  }catch(e){
+    stopPoll();
+    let msg='Ha pasado algo, vuelve a intentarlo.';
+    try{msg=JSON.parse(e.message).detail||msg;}catch(_){}
+    _edPreview('error',{kind:'doc',filename:file.name,failAt:0,
+      errTitle:'Fallo en el resumen (agente Escritor)',errMsg:msg});
+  }
+}
+
+// "↺ Reintentar" de la tarjeta de error: repite según el origen de esta vuelta.
+function _edRetry(){
+  if(_edKind==='doc'){ if(_edLastDoc) uploadDocPipeline(_edLastDoc); }
+  else transcribeVideo();
+}
+
+// "↺ Reintentar" de la tarjeta de AVISO: llama SOLO a Obsi con los ids ya guardados,
+// sin repetir Cinéfilo, Escritor, Agrupador ni Agente-BBDD. Si va bien, pasa a "hecho".
+async function _edRetryObsi(){
+  if(!_edObsiIds){setStatus('No hay datos para reintentar la sincronización','warn');return;}
+  setStatus('Reintentando sincronización con Obsidian...');
+  try{
+    await API.post('/api/obsi/sync',_edObsiIds);
+    await loadAll();
+    _edPreview('hecho',_edKind==='doc'?{kind:'doc',filename:(_edLastDoc&&_edLastDoc.name)||'documento'}:{});
+    setStatus('Sincronización con Obsidian completada');
+  }catch(e){
+    let msg=e.message;try{msg=JSON.parse(e.message).detail||msg;}catch(_){}
+    setStatus('Obsidian sigue sin responder: '+msg,'warn');
+  }
 }
 
 async function loadNote(id){
@@ -2066,8 +2477,15 @@ async function loadNote(id){
     document.getElementById('noteCat').value=n.category||'teoria';
     document.getElementById('noteTags').value=(n.tags||[]).join(', ');
     document.getElementById('btnDel').style.display='';
+    document.getElementById('btnDownloadNote').style.display='';
     document.getElementById('aiCard').classList.remove('show');
     switchTab('editor');
+    // Vista de nota: limpia el pipeline y pliega la entrada para que la nota
+    // quede arriba, con la cabecera "Nueva entrada" para volver a desplegarla.
+    _edState='nota';
+    _edClearPipeline();
+    document.getElementById('edEntradaBar').style.display='flex';
+    _edToggleEntrada(true);
     if(n.commands&&n.commands.length||n.tools&&n.tools.length||n.cves&&n.cves.length){
       showAIResult({
         category:n.category,subcategory:n.subcategory,
@@ -2109,13 +2527,18 @@ async function deleteNote(){
 }
 
 async function analyzeNote(){
-  const text=document.getElementById('noteContent').value.trim();
+  // El campo "Para apuntes cortos o específicos." (#noteTitle) ES el texto que va al
+  // Agrupador; el textarea #noteContent está oculto y ya no se usa aquí.
+  const text=document.getElementById('noteTitle').value.trim();
   if(!text){setStatus('Escribe contenido antes de analizar','warn');return;}
   showGlobalProgress('Analizando con Agrupador...');
   document.getElementById('btnAnalyze').disabled=true;
   document.getElementById('btnAnalyze').innerHTML='<span class="dots"><span></span><span></span><span></span></span>';
   try{
-    const title=document.getElementById('noteTitle').value;
+    // Sin título aparte: se usa el propio texto recortado, para que no salgan todas "Sin titulo".
+    // Corta por la última palabra completa (sin "…", que acaba en el nombre del fichero del vault).
+    let title=text;
+    if(title.length>80){const cut=title.slice(0,80);const sp=cut.lastIndexOf(' ');title=(sp>0?cut.slice(0,sp):cut).replace(/[\s\-—–:,;.]+$/,'');}
     const res=await API.post('/api/analyze',{text,title});
     const n=res.note;
     if(n){
@@ -2223,7 +2646,12 @@ async function uploadFile(file,modal=false){
       document.getElementById('uploadProgress').style.display='none';
       let rhtml;
       if(n){
-        rhtml=`<div class="osint-result-card" style="margin-top:8px;">
+      // PDF del resumen que el Escritor ha creado en esta subida (Escritor/resumenes/).
+      // El botón solo dispara la descarga; el nombre lo pone ya el servidor
+      // (Content-Disposition: attachment; filename="resumen_<id>.pdf").
+      const pdf=(data.escritor||{}).pdf_url;
+      const dlBtn=pdf?`<a href="${pdf}" download style="display:inline-block;margin-top:10px;background:var(--green);border:none;color:#000;font-weight:700;font-size:11px;padding:7px 16px;border-radius:var(--r);font-family:var(--mono);text-decoration:none;">⬇ Descargar resumen</a>`:'';
+      rhtml=`<div class="osint-result-card" style="margin-top:8px;">
           <div class="osint-result-hd">Resultado del análisis</div>
           <div class="osint-kv">
             <span class="osint-key">Categoría</span><span class="osint-val"><span class="cat-badge cat-${n.category}">${catLabel(n.category)}</span></span>
@@ -2233,6 +2661,7 @@ async function uploadFile(file,modal=false){
             <span class="osint-key">CVEs</span><span class="osint-val">${(n.cves||[]).length}</span>
           </div>
           <div style="margin-top:8px;font-size:11px;color:var(--green);font-family:var(--mono);">✓ Guardado como nota #${n.id}</div>
+          ${dlBtn}
         </div>`;
       } else {
         rhtml=`<div class="osint-result-card" style="margin-top:8px;">

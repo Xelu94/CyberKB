@@ -40,6 +40,7 @@ from models import Note, Command, Tool, CVE, OsintResult, GraphEntity, EntityRel
 import claude_service as ai
 import document_parser as parser
 import osint_tools as osint
+import progreso
 
 UPLOAD_DIR = RUNTIME_DIR / os.getenv("UPLOAD_DIR", "uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
@@ -360,7 +361,7 @@ for _carpeta in ("Cinefilo", "Escritor", "Agrupador", "Agente-BBDD", "Obsi"):
     sys.path.insert(0, str(_AGENTES_DIR / _carpeta))
 
 from cinefilo import router as cinefilo_router
-from escritor import router as escritor_router, _procesar as _escritor_procesar
+from escritor import router as escritor_router, _procesar as _escritor_procesar, _a_pdf as _escritor_pdf
 from agrupador import router as agrupador_router, _procesar as _agrupador_procesar, ResumenEscritor
 from agente_bbdd import router as bbdd_router
 from obsi import router as obsi_router
@@ -380,6 +381,14 @@ def root():
 
 
 # ─── Stats ─────────────────────────────────────────────────────────────────────
+
+@app.get("/api/progress")
+def get_progress():
+    """Paso actual del pipeline de agentes, para que el frontend lo pinte en vivo.
+    Se sirve en paralelo a la petición larga (los endpoints del pipeline son `def`
+    síncronos y corren en el threadpool, así que el event loop queda libre)."""
+    return progreso.get()
+
 
 @app.get("/api/stats")
 def get_stats(db: Session = Depends(get_db)):
@@ -433,21 +442,21 @@ def get_note(note_id: int, db: Session = Depends(get_db)):
     return _note_dict(n, full=True)
 
 
-@app.post("/api/notes", status_code=201)
-def create_note(data: NoteIn, db: Session = Depends(get_db)):
-    n = Note(
-        title=data.title,
-        content=data.content,
-        category=data.category,
-        subcategory=data.subcategory,
-        summary=data.summary,
-        tags=json.dumps(data.tags or []),
-        source_file=data.source_file,
-    )
-    db.add(n)
-    db.commit()
-    db.refresh(n)
-    return _note_dict(n)
+@app.get("/api/notes/{note_id}/pdf")
+def download_note_pdf(note_id: int, db: Session = Depends(get_db)):
+    """Genera al vuelo un PDF con el resumen de la nota (reutiliza el generador del
+    Escritor) y lo devuelve como descarga. La nota no guarda el PDF original, así que
+    se regenera desde su contenido; vale para cualquier nota ya existente."""
+    n = db.query(Note).filter(Note.id == note_id).first()
+    if not n:
+        raise HTTPException(404, "Note not found")
+    texto = (n.summary or n.content or "").strip() or "(sin contenido)"
+    fecha = (n.updated_at or n.created_at or datetime.utcnow()).isoformat(timespec="seconds")
+    import tempfile
+    ruta = Path(tempfile.mkdtemp()) / f"nota_{n.id}.pdf"
+    _escritor_pdf(ruta, n.title, texto, n.source_file or "app", fecha)
+    nombre = "".join(ch if ch not in '\\/:*?"<>|' else " " for ch in n.title).strip()[:80] or f"nota_{n.id}"
+    return FileResponse(str(ruta), media_type="application/pdf", filename=f"{nombre}.pdf")
 
 
 @app.put("/api/notes/{note_id}")
@@ -530,7 +539,11 @@ def analyze_text(data: AnalyzeIn, db: Session = Depends(get_db)):
         resumen=data.text,
         source="app-analyze",
     )
-    resultado = _agrupador_procesar(resumen)
+    progreso.iniciar()
+    try:
+        resultado = _agrupador_procesar(resumen)
+    finally:
+        progreso.terminar()
 
     nota = None
     if resultado.get("bbdd_entregado"):
@@ -551,7 +564,7 @@ def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db))
     hay paso intermedio de previsualizar sin guardar). Ver PLAN_COMANDOS_Y_FRONTEND_BACKEND.md
     Parte 2.4."""
     ext = Path(file.filename).suffix.lower()
-    if ext not in (".pdf", ".odt", ".txt", ".md", ".log"):
+    if ext not in (".pdf", ".odt", ".docx", ".html", ".htm", ".txt", ".md", ".log"):
         raise HTTPException(400, f"Unsupported file type: {ext}")
 
     dest = UPLOAD_DIR / f"{uuid.uuid4()}{ext}"
@@ -562,7 +575,11 @@ def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db))
     if not text.strip():
         raise HTTPException(422, "No text could be extracted from the file.")
 
-    resultado = _escritor_procesar(text, "app", file.filename)
+    progreso.iniciar()
+    try:
+        resultado = _escritor_procesar(text, "app", file.filename)
+    finally:
+        progreso.terminar()
 
     nota = None
     if resultado.get("agrupador_entregado"):

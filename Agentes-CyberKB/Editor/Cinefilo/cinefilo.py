@@ -372,9 +372,11 @@ def _descarte_por_metadatos(info: dict) -> None:
 # ----------------------------------------------------------------------- escritor
 
 
-def _enviar_a_escritor(payload: dict) -> bool:
+def _enviar_a_escritor(payload: dict) -> dict | None:
+    """Devuelve la respuesta del Escritor (lleva `pdf_url`, el resumen de esta
+    vuelta que la app ofrece para descargar), o None si no llego."""
     if not ESCRITOR_URL:
-        return False
+        return None
     try:
         respuesta = httpx.post(
             ESCRITOR_URL,
@@ -386,11 +388,11 @@ def _enviar_a_escritor(payload: dict) -> bool:
             timeout=CFG["escritor"]["timeout_segundos"],
         )
         respuesta.raise_for_status()
-        return True
-    except httpx.HTTPError:
+        return respuesta.json()
+    except (httpx.HTTPError, ValueError):
         # El texto ya existe y esta guardado en disco: que el Escritor este caido o
         # rechace el material no invalida el trabajo de extraccion.
-        return False
+        return None
 
 
 # ------------------------------------------------------------------ orquestacion
@@ -408,6 +410,12 @@ def _extraer_texto(url: str, info: dict, trabajo: Path) -> tuple[str, str]:
     return _transcribir(_preparar_audio(audio)), "transcripcion"
 
 
+try:
+    import progreso  # progreso en vivo del pipeline (opcional: solo dentro de la app)
+except Exception:
+    progreso = None
+
+
 def _procesar(url: str, titulo: str | None) -> dict:
     """Red de seguridad: lo que falle de forma imprevista sale como error del
     agente, no como excepcion sin tratar. El Escritor y el Agrupador envuelven
@@ -423,6 +431,8 @@ def _procesar(url: str, titulo: str | None) -> dict:
 
 
 def _ejecutar(url: str, titulo: str | None) -> dict:
+    if progreso:
+        progreso.set_paso("cinefilo")
     _validar_url(url)
     info = _inspeccionar(url)
     _descarte_por_metadatos(info)
@@ -465,7 +475,18 @@ def _ejecutar(url: str, titulo: str | None) -> dict:
     except OSError:
         raise _error_generico()
 
-    return {**payload, "escritor_entregado": _enviar_a_escritor(payload)}
+    escritor = _enviar_a_escritor(payload)
+    resultado = {
+        **payload,
+        "escritor_entregado": escritor is not None,
+        "pdf_url": (escritor or {}).get("pdf_url"),
+    }
+    if escritor is not None:
+        # Propagado por la cadena Escritor -> Agrupador -> Agente-BBDD: si Obsi (el
+        # ultimo eslabon) no sincronizo, el frontend muestra "aviso" en vez de "hecho".
+        resultado["obsi_entregado"] = escritor.get("obsi_entregado", False)
+        resultado["obsi_ids"] = escritor.get("obsi_ids")
+    return resultado
 
 
 @router.post("/transcribir")
@@ -479,4 +500,10 @@ def transcribir(peticion: PeticionVideo):
     `async def` sin awaits, bloquea el loop entero y esa llamada nunca se
     atiende hasta agotar el timeout (verificado con un video real, 2026-09-28).
     """
-    return _procesar(peticion.url, peticion.titulo)
+    if progreso:
+        progreso.iniciar()
+    try:
+        return _procesar(peticion.url, peticion.titulo)
+    finally:
+        if progreso:
+            progreso.terminar()

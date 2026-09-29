@@ -233,3 +233,57 @@ enganche de agentes de hoy) que beneficio inmediato. Si se decide adoptarla
 más adelante, revisar el estado de `capas` de nuevo en ese momento (seguirá
 divergiendo de `main` mientras tanto, pero ya sin la mayoría del contenido de
 valor que la motivaba a corto plazo).
+
+
+---
+
+## Frontend real del Editor — pendientes tras construirlo (2026-09-30)
+
+Lista de trabajo del frontend real ya construido (vídeo/documento/texto vía
+agentes, progreso en vivo, ver/descargar notas). Complementa la sección
+"Frontend del Editor — Parte 3" de más arriba, que ya está mayormente hecha.
+
+
+
+- **Botón "+ Nueva"** (`index.html`, toolbar del Editor): oculto por ahora
+  (`style="display:none"`, sigue llamando a `newNote()` si se reactiva). Hay
+  que mirar qué hace exactamente hoy (limpia título/contenido/categoría/tags,
+  oculta la tarjeta IA y el botón borrar, pone foco en el título) y decidir si
+  eso sigue teniendo sentido con el nuevo flujo (vídeo/documento vía agentes)
+  o si hay que cambiarlo.
+
+- **Botón "Guardar"** (`index.html`, toolbar del Editor): eliminado del HTML y
+  su backend `POST /api/notes` (`create_note` en `main.py`) borrado. Queda
+  pendiente la función `saveNote()` en el frontend: su rama de crear nota
+  llama a un POST que ya no existe (la rama `PUT /api/notes/{id}` sí sigue
+  viva). Hay que decidir si se borra `saveNote()`, si se deja solo para
+  editar notas existentes, o si guardar lo harán ya los agentes (BBDD/Obsi).
+
+- **Botón "Cancelar" para procesos en curso** (`index.html` + backend): falta
+  poder cancelar una transcripción de vídeo o una subida de documento mientras
+  está "En curso". Se llegó a montar y se revirtió a propósito, porque una
+  cancelación honesta necesita decidir el alcance:
+  - **Front (fácil, ya probado):** un `AbortController` por petición y un botón
+    "✕ Cancelar" en la tarjeta de "En curso". Aborta la ESPERA y devuelve la
+    interfaz al instante, pero **no detiene el backend**: la cadena es una sola
+    petición síncrona (`/api/cinefilo/transcribir`, `/api/upload`) y los agentes
+    siguen procesando esa vuelta por detrás (la nota puede acabar creándose).
+    Pasos: `API.post(path,data,opts)` con `signal`; `AbortController` en
+    `transcribeVideo()` y `uploadDocPipeline()`; tratar `AbortError` en el catch
+    (volver a "inicial" + aviso); botón en la rama `curso` de `_edPreview()`.
+  - **Backend (de verdad, pendiente de decidir):** para parar el proceso real
+    haría falta cancelación cooperativa en la cadena (Cinéfilo → Escritor →
+    Agrupador → BBDD → Obsi): un id de trabajo, un flag de cancelación que cada
+    agente consulte entre pasos, y limpiar lo ya escrito (JSON en disco, filas
+    parciales). Es rework de los agentes; decidir si merece la pena o si basta
+    con el cancelar de front + avisar de que el servidor puede seguir.
+  - Decidir el alcance antes de reimplementar. Referencia: se hizo y revirtió
+    en la sesión del 2026-09-29.
+
+- **Categoría (select `#noteCat`) y Tags (`#noteTags`)** (`index.html`,
+  toolbar del Editor): ocultos por ahora (`style="display:none"`), no
+  borrados, porque los siguen usando `newNote()`, `loadNote()`, `saveNote()`,
+  `analyzeNote()` y la subida de documentos. Hay que mirar si con el flujo de
+  agentes (el Agrupador ya decide categoría y tags) tienen sentido: quitarlos
+  del todo, dejarlos solo de lectura para mostrar lo que decidió el agente, o
+  mantenerlos para corregir a mano.
