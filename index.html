@@ -5253,9 +5253,14 @@ function renderSqliGen(){
   // Stepper de las 4 fases (la 3, columnas, solo aplica a UNION)
   const steps=[[1,'Detectar'],[2,'Tipo'],[3,'Columnas'],[4,'Explotar']];
   const stepper=`<div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap;">`+steps.map(([n,lbl])=>{
-    const na=(n===3 && _sqliType && _sqliType!=='union');
+    // Bloqueadas hasta elegir tipo (Fase 2): Columnas (3) y Explotar (4). Columnas
+    // solo aplica a UNION, así que con un tipo blind/error queda bloqueada como n/a.
+    let locked=false, suffix='';
+    if(n===3){ locked = _sqliType!=='union'; if(_sqliType && _sqliType!=='union') suffix=' (n/a)'; else if(!_sqliType) suffix=' 🔒'; }
+    if(n===4){ locked = !_sqliType; if(!_sqliType) suffix=' 🔒'; }
     const act=n===_sqliPhase;
-    return `<button onclick="setSqliPhase(${n})" ${na?'disabled':''} style="flex:1;min-width:82px;font-size:10px;font-family:var(--mono);padding:5px 6px;border-radius:6px;cursor:${na?'not-allowed':'pointer'};border:1px solid ${act?'var(--cyan)':'var(--border)'};background:${act?'rgba(0,221,255,.12)':'var(--bg3)'};color:${na?'var(--text3)':act?'var(--cyan)':'var(--text2)'};opacity:${na?.5:1};">${n}. ${lbl}${na?' (n/a)':''}</button>`;
+    const ttl = locked && !_sqliType ? ' title="Elige primero el tipo en la Fase 2"' : '';
+    return `<button onclick="setSqliPhase(${n})" ${locked?'disabled':''}${ttl} style="flex:1;min-width:82px;font-size:10px;font-family:var(--mono);padding:5px 6px;border-radius:6px;cursor:${locked?'not-allowed':'pointer'};border:1px solid ${act?'var(--cyan)':'var(--border)'};background:${act?'rgba(0,221,255,.12)':'var(--bg3)'};color:${locked?'var(--text3)':act?'var(--cyan)':'var(--text2)'};opacity:${locked?.5:1};">${n}. ${lbl}${suffix}</button>`;
   }).join('')+`</div>`;
 
   let body='';
