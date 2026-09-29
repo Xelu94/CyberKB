@@ -2500,6 +2500,30 @@ const OSINT_PARAM={
   'hash-vt':'hash', abuseipdb:'ip', malwarebazaar:'hash',
 };
 
+// Descripción corta de cada herramienta (se muestra al seleccionarla, antes de ejecutar)
+const OSINT_DESC={
+  whois:'WHOIS del dominio: registrador, fechas de creación/expiración, nameservers y contactos públicos.',
+  dns:'Registros DNS del dominio (A, AAAA, MX, NS, TXT…).',
+  subdomains:'Descubre subdominios del dominio a partir de fuentes públicas (crt.sh y otras).',
+  ssl:'Certificado SSL/TLS del dominio: emisor, validez y dominios que cubre (SANs).',
+  wayback:'Copias históricas de la URL en Wayback Machine (archive.org).',
+  dmarc:'Políticas DMARC y SPF del dominio (protección anti-suplantación de email).',
+  robots:'Lee el robots.txt del sitio: rutas que pide no indexar (a veces revela directorios interesantes).',
+  ip:'Geolocalización y datos de una IP: país, ISP/organización y ASN.',
+  'reverse-dns':'DNS inverso (PTR): el nombre de host asociado a una IP.',
+  shodan:'Busca la IP/host en Shodan: puertos, servicios y banners expuestos a internet.',
+  'email-verify':'Comprueba si un email es válido (formato, registro MX y respuesta SMTP).',
+  hibp:'Have I Been Pwned: si el email aparece en filtraciones de datos conocidas.',
+  hunter:'Hunter.io: emails públicos asociados a un dominio y su patrón.',
+  leakradar:'LeakRadar: busca credenciales o datos filtrados de un email o dominio.',
+  headers:'Cabeceras HTTP de una URL: servidor, tecnología y cabeceras de seguridad.',
+  urlscan:'urlscan.io: escanea una URL (captura, recursos que carga y veredicto).',
+  virustotal:'VirusTotal: reputación de un dominio, IP, URL o hash (detecciones de motores AV).',
+  'hash-vt':'VirusTotal por hash: reputación de un fichero (MD5/SHA1/SHA256).',
+  abuseipdb:'AbuseIPDB: reputación de una IP según reportes de abuso (spam, ataques…).',
+  malwarebazaar:'MalwareBazaar: busca un hash entre muestras de malware conocidas.',
+};
+
 function selectOsintTool(name,btn){
   S.osintTool=name;
   document.querySelectorAll('.osint-tool-btn').forEach(b=>b.classList.remove('active'));
@@ -2509,7 +2533,11 @@ function selectOsintTool(name,btn){
 }
 
 function clearOsintResult(){
-  document.getElementById('osintBody').innerHTML=`<div style="text-align:center;padding:50px;color:var(--text3);font-family:var(--mono);font-size:12px;"><div style="font-size:32px;margin-bottom:10px;opacity:.3;">◎</div>Listo para ejecutar</div>`;
+  const desc=OSINT_DESC[S.osintTool||'whois'];
+  document.getElementById('osintBody').innerHTML=`<div style="text-align:center;padding:40px 16px;color:var(--text3);font-family:var(--mono);font-size:12px;">
+    <div style="font-size:32px;margin-bottom:10px;opacity:.3;">◎</div>
+    ${desc?`<div style="max-width:540px;margin:0 auto 12px;color:var(--text2);font-size:12.5px;line-height:1.6;font-family:var(--sans);">${esc(desc)}</div>`:''}
+    Listo para ejecutar</div>`;
 }
 
 async function runOsint(){
