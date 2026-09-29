@@ -8,7 +8,7 @@ from models import Note, CVE
 import re
 
 
-from layers.routers_functions import _persist_mitre, _persist_entities
+from layers.routers_functions import _persist_mitre, _reanalizar_con_agrupador
 
 
 router = APIRouter()
@@ -161,12 +161,22 @@ async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
     # Persist MITRE techniques
     _persist_mitre(note_data.get("mitre_techniques", []), n, db)
 
-    # Persist graph entities (best-effort)
+    # Reanalisis via Agrupador (tools/commands/cves/mitre/entidades), unificado
+    # con /api/notes/{id}/extract y /api/graph/reindex-all -- igual que en main.
+    # source="app-reextract" conserva category/subcategory/tags: la clasificacion
+    # especializada del forense (veredicto/familia) NO se pisa. Efecto secundario
+    # asumido: ruido menor en tools (p.ej. "VirusTotal" puede colarse como tool).
+    # Ojo: forensic_analyze es async. La cadena del Agrupador hace HTTP a este
+    # mismo servidor (/api/bbdd, /api/obsi), asi que llamarla en linea bloquearia
+    # el event loop y el POST anidado se estancaria hasta timeout. La ejecutamos
+    # en un hilo (to_thread) para dejar el loop libre y que la cadena funcione.
+    # (En main es una llamada directa; aqui la adaptamos por ser endpoint async.)
     try:
-        ent = ai.extract_entities(content_body[:6000])
-        _persist_entities(ent.get("entities", []), ent.get("relations", []), n, db)
+        import asyncio
+        await asyncio.to_thread(_reanalizar_con_agrupador, n, db)
     except Exception:
-        pass
+        import traceback
+        traceback.print_exc()
 
     return {
         "note_id":    n.id,
