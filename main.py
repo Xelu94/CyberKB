@@ -332,12 +332,75 @@ def _seed_privesc(_=None):
         db.close()
 
 
+# ─── Catálogo base de herramientas de pentest ────────────────────────────────
+# Las 18 herramientas base van siempre en el módulo, marcadas con la etiqueta
+# 'catalogo-base' para distinguirlas de las del usuario. El frontend pinta el
+# badge ★ Base cuando la tag incluye 'catalogo-base' (ver index.html).
+_TOOLS_SEED = [
+    {"name": "nmap",        "category": "enumeracion",      "url": "https://nmap.org",                                   "description": "Escáner de red y puertos: descubre hosts, servicios y versiones."},
+    {"name": "netdiscover", "category": "enumeracion",      "url": "https://github.com/netdiscover-scanner/netdiscover", "description": "Descubrimiento de hosts en la red local por ARP."},
+    {"name": "arp-scan",    "category": "enumeracion",      "url": "https://github.com/royhills/arp-scan",               "description": "Descubrimiento de hosts por ARP, rápido y directo."},
+    {"name": "enum4linux",  "category": "enumeracion",      "url": "https://github.com/CiscoCXSecurity/enum4linux",      "description": "Enumeración de SMB/NetBIOS: usuarios, grupos, recursos compartidos."},
+    {"name": "smbclient",   "category": "enumeracion",      "url": "https://www.samba.org",                              "description": "Cliente SMB para listar y acceder a recursos compartidos de Windows."},
+    {"name": "dig",         "category": "reconocimiento",   "url": "https://linux.die.net/man/1/dig",                    "description": "Consultas DNS; útil para transferencias de zona (AXFR)."},
+    {"name": "dnsrecon",    "category": "reconocimiento",   "url": "https://github.com/darkoperator/dnsrecon",           "description": "Reconocimiento DNS: registros, subdominios y AXFR."},
+    {"name": "curl",        "category": "reconocimiento",   "url": "https://curl.se",                                    "description": "Cliente HTTP de línea de comandos; ver cabeceras y probar endpoints."},
+    {"name": "hydra",       "category": "explotacion",      "url": "https://github.com/vanhauser-thc/thc-hydra",         "description": "Fuerza bruta de credenciales sobre múltiples protocolos (SSH, RDP, HTTP...)."},
+    {"name": "searchsploit","category": "explotacion",      "url": "https://gitlab.com/exploit-database/exploitdb",      "description": "Búsqueda local de exploits de Exploit-DB por producto y versión."},
+    {"name": "Metasploit",  "category": "explotacion",      "url": "https://www.metasploit.com",                         "description": "Framework de explotación con módulos de exploits, auxiliares y payloads."},
+    {"name": "ffuf",        "category": "web-hacking",      "url": "https://github.com/ffuf/ffuf",                       "description": "Fuzzing web rápido de directorios, ficheros y parámetros."},
+    {"name": "gobuster",    "category": "web-hacking",      "url": "https://github.com/OJ/gobuster",                     "description": "Fuerza bruta de directorios, DNS y vhosts."},
+    {"name": "nikto",       "category": "web-hacking",      "url": "https://github.com/sullo/nikto",                     "description": "Escáner de vulnerabilidades y malas configuraciones en servidores web."},
+    {"name": "sqlmap",      "category": "web-hacking",      "url": "https://sqlmap.org",                                 "description": "Detección y explotación automática de inyección SQL."},
+    {"name": "Burp Suite",  "category": "web-hacking",      "url": "https://portswigger.net/burp",                       "description": "Proxy de interceptación para pruebas de aplicaciones web (Repeater, Intruder)."},
+    {"name": "Impacket",    "category": "post-explotacion", "url": "https://github.com/fortra/impacket",                 "description": "Herramientas Python para protocolos Windows (psexec, secretsdump, mssqlclient)."},
+    {"name": "xfreerdp",    "category": "post-explotacion", "url": "https://www.freerdp.com",                            "description": "Cliente RDP para Linux; conexión a escritorios remotos de Windows."},
+]
+
+
+def _seed_base_tools(_=None):
+    """Siembra el catálogo base de pentest UNA sola vez (primer arranque).
+
+    Se siembra una única vez (marcador en disco) A PROPÓSITO: así, si el usuario
+    borra una base, no reaparece al reiniciar; si la quiere de vuelta, la
+    re-añade a mano como cualquier otra. (En capas RUNTIME_DIR está desactivado,
+    así que el marcador vive junto al bundle — BUNDLE_DIR.)
+    """
+    marker = BUNDLE_DIR / ".tools_base_seeded"
+    if marker.exists():
+        return
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        for td in _TOOLS_SEED:
+            # No duplicamos una que ya exista con ese nombre (manual o de nota)
+            if db.query(Tool).filter(Tool.name.ilike(td["name"])).first():
+                continue
+            db.add(Tool(
+                name=td["name"], url=td.get("url"), description=td.get("description"),
+                category=td.get("category"), tool_type=td.get("tool_type", "software"),
+                requires_api=False, mention_count=1,
+                tags=json.dumps(["catalogo-base"]),
+            ))
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"[seed_base_tools] Error: {e}")
+    finally:
+        db.close()
+    try:
+        marker.write_text("1", encoding="utf-8")
+    except Exception:
+        pass
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
     _migrate_db()
     _seed_google_dorks(None)
     _seed_privesc(None)
+    _seed_base_tools(None)
     yield
 
 

