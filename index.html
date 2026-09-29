@@ -944,8 +944,8 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
             <span class="enum-gen-label">Velocidad</span>
             <select class="enum-gen-sel" id="nmapSpeed" onchange="buildNmapCmd()">
               <option value="-T2">Sigiloso (-T2)</option>
-              <option value="-T3">Equilibrado (-T3)</option>
-              <option value="-T4" selected>Agresivo (-T4)</option>
+              <option value="-T3" selected>Equilibrado (-T3, por defecto)</option>
+              <option value="-T4">Agresivo (-T4)</option>
             </select>
           </div>
           <div class="enum-gen-row">
@@ -5623,7 +5623,7 @@ function buildNmapCmd(){
   // Phase 1 — velocidad con -T; -p- y --min-rate son toggles opcionales (como -Pn/-v)
   let cmd1='sudo nmap';
   if(_ENUM_FLAGS.p)       cmd1+=' -p-';
-  cmd1+=' '+timing;
+  if(timing && timing!=='-T3') cmd1+=' '+timing;   // -T3 es el default de nmap → no hace falta ponerlo
   if(_ENUM_FLAGS.minrate) cmd1+=' --min-rate 5000';
   if(_ENUM_FLAGS.pn)      cmd1+=' -Pn';
   if(_ENUM_FLAGS.v)       cmd1+=' -v';
