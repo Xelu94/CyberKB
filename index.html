@@ -943,15 +943,16 @@ La IA clasificará el contenido, extraerá comandos, herramientas y CVEs automá
           <div class="enum-gen-row">
             <span class="enum-gen-label">Velocidad</span>
             <select class="enum-gen-sel" id="nmapSpeed" onchange="buildNmapCmd()">
-              <option value="1000">Sigiloso (--min-rate 1000)</option>
-              <option value="3000">Equilibrado (--min-rate 3000)</option>
-              <option value="5000" selected>Agresivo (--min-rate 5000)</option>
+              <option value="-T2">Sigiloso (-T2)</option>
+              <option value="-T3">Equilibrado (-T3)</option>
+              <option value="-T4" selected>Agresivo (-T4)</option>
             </select>
           </div>
           <div class="enum-gen-row">
             <span class="enum-gen-label">Flags fase 1</span>
             <div class="enum-toggle-row" style="margin:0;">
               <label class="enum-toggle" id="tgl-p" onclick="toggleEnumFlag('p')" title="Escanea los 65535 puertos (sin él, solo los 1000 más comunes)">-p-</label>
+              <label class="enum-toggle" id="tgl-minrate" onclick="toggleEnumFlag('minrate')" title="Fuerza un mínimo de 5000 paquetes/segundo (ritmo garantizado, más ruidoso)">--min-rate 5000</label>
               <label class="enum-toggle" id="tgl-pn" onclick="toggleEnumFlag('pn')">-Pn</label>
               <label class="enum-toggle" id="tgl-v" onclick="toggleEnumFlag('v')">-v</label>
             </div>
@@ -5525,7 +5526,7 @@ function toggleEnumAcc(hd){
 }
 
 // Network discovery command generator
-const _ENUM_FLAGS={p:false,pn:false,v:false,sV:true,sC:true,O:false,A:false,oN:false};
+const _ENUM_FLAGS={p:false,minrate:false,pn:false,v:false,sV:true,sC:true,O:false,A:false,oN:false};
 function toggleEnumFlag(flag){
   _ENUM_FLAGS[flag]=!_ENUM_FLAGS[flag];
   document.getElementById('tgl-'+flag).classList.toggle('active',_ENUM_FLAGS[flag]);
@@ -5616,15 +5617,16 @@ function onSvcPortsChanged(){
 
 function buildNmapCmd(){
   const ip=(document.getElementById('nmapIP').value||'TARGET_IP').trim();
-  const rate=document.getElementById('nmapSpeed').value;
+  const timing=document.getElementById('nmapSpeed').value;   // -T2 / -T3 / -T4
   const ports=(document.getElementById('nmapPorts').value||'').trim();
 
-  // Phase 1 — -p- es opcional (toggle), como -Pn y -v
+  // Phase 1 — velocidad con -T; -p- y --min-rate son toggles opcionales (como -Pn/-v)
   let cmd1='sudo nmap';
-  if(_ENUM_FLAGS.p)  cmd1+=' -p-';
-  cmd1+=' --min-rate '+rate;
-  if(_ENUM_FLAGS.pn) cmd1+=' -Pn';
-  if(_ENUM_FLAGS.v)  cmd1+=' -v';
+  if(_ENUM_FLAGS.p)       cmd1+=' -p-';
+  cmd1+=' '+timing;
+  if(_ENUM_FLAGS.minrate) cmd1+=' --min-rate 5000';
+  if(_ENUM_FLAGS.pn)      cmd1+=' -Pn';
+  if(_ENUM_FLAGS.v)       cmd1+=' -v';
   cmd1+=' '+ip;
   document.getElementById('nmapCmd1').textContent=cmd1;
 
