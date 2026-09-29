@@ -11,6 +11,23 @@ from database import get_db, init_db, engine
 from models import Note, Command, Tool, CVE
 
 
+# ─── Cadena de agentes del Editor (Escritor -> Agrupador -> Agente-BBDD -> Obsi) ─
+# Sus carpetas se anaden a sys.path ANTES de importar los routers de capas, porque
+# layers/routers/analyze.py importa _procesar de escritor y agrupador. La URL entre
+# Escritor y Agrupador no tiene default en el codigo (las demas salen de cada
+# config.json), asi que la fijamos aqui apuntando al propio servidor.
+_AGENTES_DIR = Path(__file__).resolve().parent / "Agentes-CyberKB" / "Editor"
+for _carpeta in ("Cinefilo", "Escritor", "Agrupador", "Agente-BBDD", "Obsi"):
+    sys.path.insert(0, str(_AGENTES_DIR / _carpeta))
+os.environ.setdefault("AGRUPADOR_URL", "http://localhost:8000/api/agrupador/agrupar")
+
+from cinefilo import router as cinefilo_router
+from escritor import router as escritor_router
+from agrupador import router as agrupador_router
+from agente_bbdd import router as bbdd_router
+from obsi import router as obsi_router
+
+
 from layers.routers.osint import router as osint_router
 from layers.routers.notes import router as notes_router
 from layers.routers.analyze import router as analyze_router
@@ -487,6 +504,13 @@ app.include_router(mitre_router)
 # ─── Forensic Mode ────────────────────────────────────────────────────────────
 
 app.include_router(forensic_router)
+
+# Routers de la cadena de agentes del Editor (los usan /api/upload y /api/analyze)
+app.include_router(cinefilo_router)
+app.include_router(escritor_router)
+app.include_router(agrupador_router)
+app.include_router(bbdd_router)
+app.include_router(obsi_router)
 
 if __name__ == "__main__":
     import multiprocessing

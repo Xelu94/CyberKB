@@ -1,24 +1,20 @@
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
-import claude_service as ai
 from pathlib import Path
 from models import Note
-import json
 import os
 import uuid
 import shutil
 import document_parser as parser
 
-from layers.routers_functions import (
-    AnalyzeIn, 
-    _persist_tools, 
-    _persist_commands, 
-    _persist_cves,
-    _persist_mitre, 
-    _persist_entities,
-    _runtime_dir                   
-)
+from layers.routers_functions import AnalyzeIn, _note_dict, _runtime_dir
+
+# Cadena de agentes del Editor (Escritor -> Agrupador -> Agente-BBDD -> Obsi).
+# main.py deja las carpetas de los agentes en sys.path al arrancar, antes de
+# importar este router, asi que estos imports resuelven.
+from escritor import _procesar as _escritor_procesar
+from agrupador import _procesar as _agrupador_procesar, ResumenEscritor
 
 
 router = APIRouter()
@@ -31,18 +27,34 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 @router.post("/api/analyze")
 def analyze_text(data: AnalyzeIn, db: Session = Depends(get_db)):
-    result = ai.analyze_content(data.text)
-    # Persist tools discovered
-    _persist_tools(result.get("tools", []), db)
-    return result
+    """Texto pegado directamente en el editor (sin fichero): va derecho a
+    Agrupador, sin pasar por Escritor -- pensado para contenido corto y ya
+    concreto (un comando, una CVE, una ficha), no para documentos largos que
+    necesiten resumen previo."""
+    resumen = ResumenEscritor(
+        id=uuid.uuid4().hex,
+        titulo=(data.title or "").strip() or "Sin titulo",
+        resumen=data.text,
+        source="app-analyze",
+    )
+    resultado = _agrupador_procesar(resumen)
+
+    nota = None
+    if resultado.get("bbdd_entregado"):
+        nota = (
+            db.query(Note)
+            .filter(Note.title == resultado["titulo"])
+            .order_by(Note.id.desc())
+            .first()
+        )
+
+    return {"agrupador": resultado, "note": _note_dict(nota, full=True) if nota else None}
 
 
 @router.post("/api/upload")
-async def upload_document(
-    file: UploadFile = File(...),
-    auto_save: bool = Form(False),
-    db: Session = Depends(get_db),
-):
+def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Documento subido desde el editor: va a Escritor, que encadena a Agrupador
+    -> Agente-BBDD -> Obsi. Sin auto_save: la cadena decide por si sola si guarda."""
     ext = Path(file.filename).suffix.lower()
     if ext not in (".pdf", ".odt", ".txt", ".md", ".log"):
         raise HTTPException(400, f"Unsupported file type: {ext}")
@@ -55,41 +67,20 @@ async def upload_document(
     if not text.strip():
         raise HTTPException(422, "No text could be extracted from the file.")
 
-    analysis = ai.analyze_content(text)
-    tools = _persist_tools(analysis.get("tools", []), db)
+    resultado = _escritor_procesar(text, "app", file.filename)
 
-    note_id = None
-    if auto_save:
-        n = Note(
-            title=Path(file.filename).stem,
-            content=text[:20000],
-            category=analysis.get("category", "teoria"),
-            subcategory=analysis.get("subcategory"),
-            summary=analysis.get("summary"),
-            tags=json.dumps(analysis.get("tags", [])),
-            source_file=file.filename,
+    nota = None
+    if resultado.get("agrupador_entregado"):
+        nota = (
+            db.query(Note)
+            .filter(Note.title == resultado["titulo"], Note.source_file == file.filename)
+            .order_by(Note.id.desc())
+            .first()
         )
-        db.add(n)
-        db.commit()
-        db.refresh(n)
-        _persist_commands(analysis.get("commands", []), n, db)
-        _persist_cves(analysis.get("cves", []), n, db)
-        _persist_mitre(analysis.get("mitre_techniques", []), n, db)
-        for t in tools:
-            if t not in n.tools:
-                n.tools.append(t)
-        db.commit()
-        # Extract graph entities asynchronously (best-effort)
-        try:
-            ent_result = ai.extract_entities(text[:6000])
-            _persist_entities(ent_result.get("entities", []), ent_result.get("relations", []), n, db)
-        except Exception as _e:
-            pass  # entity extraction failure must not break upload
-        note_id = n.id
 
     return {
         "filename": file.filename,
         "text_length": len(text),
-        "analysis": analysis,
-        "note_id": note_id,
+        "escritor": resultado,
+        "note": _note_dict(nota, full=True) if nota else None,
     }
