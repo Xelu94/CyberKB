@@ -60,6 +60,27 @@ genérica de Agrupador).
 3. Blindarlo: nota temporal separada para la extracción, luego reenlazar las
    entidades a la nota forense real (más trabajo, sin riesgo).
 
+**Prueba real (2026-09-29), sin aplicar — se queda apartada.** Se recreó una
+nota forense realista a mano (misma forma exacta que produce
+`/api/forensic/analyze`: categoría `forense`, subcategoría `malware-analysis`,
+un CVE real y 2 técnicas MITRE, sobre un caso de LockBit 3.0/Citrix Bleed) y se
+ejecutó `/api/notes/{id}/extract` sobre ella (el mismo mecanismo que se usaría
+si Forense se unificara). El riesgo resultó **mucho menor de lo esperado**,
+gracias al arreglo del punto "Riesgo 5" (más abajo, ya aplicado):
+
+- Categoría/subcategoría/tags: **se conservaron** — ya no se pisan.
+- El CVE existente se **enriqueció** (título, severidad, productos afectados)
+  sin duplicarse.
+- Las técnicas MITRE: sin cambios, sin duplicar.
+- Único efecto secundario real: Agrupador añadió `VirusTotal` como fila en
+  `tools`, porque el texto lo menciona como fuente de detección — ruido, no
+  daño (VirusTotal no es una herramienta que el analista use activamente en el
+  sentido que Agrupador normalmente captura).
+
+Si se decide unificar, este es el estado real del riesgo hoy: seguro para
+categoría/CVE/MITRE, con un pequeño problema de ruido en `tools` que habría
+que filtrar (o aceptar).
+
 ---
 
 ## Agrupador no puede bajar de Opus — coste de `reindex-all`
