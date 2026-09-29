@@ -337,6 +337,7 @@ async def lifespan(app: FastAPI):
     _migrate_db()
     _seed_google_dorks(None)
     _seed_privesc(None)
+    _seed_base_tools(None)
     yield
 
 
@@ -581,9 +582,14 @@ def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db))
 
 
 def _persist_mitre(techniques: list, note: Note, db: Session):
-    """Upsert MITRE ATT&CK techniques extracted from a note."""
+    """Upsert de técnicas ATT&CK extraídas de una nota.
+
+    Si el ID está en el catálogo de referencia (mitre_reference.json), usamos su
+    táctica/nombre canónicos en lugar de los que devuelve la IA (que a veces se
+    equivoca de táctica); así nada cae en "Uncategorized" por un fallo del modelo.
+    """
     for td in techniques:
-        tid = td.get("id", "").strip()
+        tid = td.get("id", "").strip().upper()
         if not tid:
             continue
         existing = db.query(MitreTechnique).filter(
@@ -591,11 +597,12 @@ def _persist_mitre(techniques: list, note: Note, db: Session):
             MitreTechnique.note_id == note.id
         ).first()
         if not existing:
+            ref = _MITRE_REF_BY_ID.get(tid)
             mt = MitreTechnique(
                 note_id=note.id,
                 technique_id=tid,
-                technique_name=td.get("name"),
-                tactic=td.get("tactic"),
+                technique_name=(ref["name"] if ref else td.get("name")),
+                tactic=((ref.get("tactics") or [None])[0] if ref else td.get("tactic")),
                 context_snippet=td.get("snippet"),
             )
             db.add(mt)
@@ -616,7 +623,9 @@ def get_tool(tool_id: int, db: Session = Depends(get_db)):
     if not t:
         raise HTTPException(404, "Tool not found")
     d = _tool_dict(t)
-    d["notes"] = [{"id": n.id, "title": n.title, "category": n.category} for n in t.notes]
+    # La relación Tool→Notes en el modelo se llama `tools` (no `notes`); usar el
+    # nombre correcto — antes daba 500 al abrir el detalle de cualquier herramienta.
+    d["notes"] = [{"id": n.id, "title": n.title, "category": n.category} for n in t.tools]
     d["commands"] = [_cmd_dict(c) for c in db.query(Command).filter(Command.tool_name.ilike(t.name)).all()]
     return d
 
@@ -625,6 +634,7 @@ class ToolUpdate(BaseModel):
     url: Optional[str] = None
     description: Optional[str] = None
     category: Optional[str] = None
+    tool_type: Optional[str] = None
     use_cases: Optional[list[str]] = None
     requires_api: Optional[bool] = None
     api_info: Optional[str] = None
@@ -641,6 +651,8 @@ def update_tool(tool_id: int, data: ToolUpdate, db: Session = Depends(get_db)):
         t.description = data.description
     if data.category is not None:
         t.category = data.category
+    if data.tool_type is not None:
+        t.tool_type = data.tool_type
     if data.use_cases is not None:
         t.use_cases = json.dumps(data.use_cases)
     if data.requires_api is not None:
@@ -650,6 +662,111 @@ def update_tool(tool_id: int, data: ToolUpdate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(t)
     return _tool_dict(t)
+
+
+# ─── [Módulo Herramientas] Crear / borrar / sembrar catálogo ──────────────────
+class ToolCreate(BaseModel):
+    name: str
+    url: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    tool_type: Optional[str] = "software"
+    requires_api: Optional[bool] = False
+    api_info: Optional[str] = None
+
+
+@app.post("/api/tools", status_code=201)
+def create_tool(data: ToolCreate, db: Session = Depends(get_db)):
+    """Crea una herramienta a mano. Si ya existe una con ese nombre, sube su
+    contador de menciones en vez de duplicarla (upsert por nombre)."""
+    name = (data.name or "").strip()
+    if not name:
+        raise HTTPException(400, "El nombre es obligatorio")
+    existing = db.query(Tool).filter(Tool.name.ilike(name)).first()
+    if existing:
+        existing.mention_count = (existing.mention_count or 0) + 1
+        db.commit()
+        db.refresh(existing)
+        return {"created": False, **_tool_dict(existing)}
+    t = Tool(
+        name=name,
+        url=data.url or None,
+        description=data.description or None,
+        category=data.category or None,
+        tool_type=data.tool_type or "software",
+        requires_api=bool(data.requires_api),
+        api_info=data.api_info or None,
+        mention_count=1,
+    )
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+    return {"created": True, **_tool_dict(t)}
+
+
+@app.delete("/api/tools/{tool_id}", status_code=204)
+def delete_tool(tool_id: int, db: Session = Depends(get_db)):
+    """Borra una herramienta (p. ej. un falso positivo del análisis por IA)."""
+    t = db.query(Tool).filter(Tool.id == tool_id).first()
+    if not t:
+        raise HTTPException(404, "Tool not found")
+    db.delete(t)
+    db.commit()
+    return
+
+
+# Catálogo base: herramientas de pentest que aparecen en los módulos de la app.
+_TOOLS_SEED = [
+    {"name": "nmap",        "category": "enumeracion",      "url": "https://nmap.org",                                   "description": "Escáner de red y puertos: descubre hosts, servicios y versiones."},
+    {"name": "netdiscover", "category": "enumeracion",      "url": "https://github.com/netdiscover-scanner/netdiscover", "description": "Descubrimiento de hosts en la red local por ARP."},
+    {"name": "arp-scan",    "category": "enumeracion",      "url": "https://github.com/royhills/arp-scan",               "description": "Descubrimiento de hosts por ARP, rápido y directo."},
+    {"name": "enum4linux",  "category": "enumeracion",      "url": "https://github.com/CiscoCXSecurity/enum4linux",      "description": "Enumeración de SMB/NetBIOS: usuarios, grupos, recursos compartidos."},
+    {"name": "smbclient",   "category": "enumeracion",      "url": "https://www.samba.org",                              "description": "Cliente SMB para listar y acceder a recursos compartidos de Windows."},
+    {"name": "dig",         "category": "reconocimiento",   "url": "https://linux.die.net/man/1/dig",                    "description": "Consultas DNS; útil para transferencias de zona (AXFR)."},
+    {"name": "dnsrecon",    "category": "reconocimiento",   "url": "https://github.com/darkoperator/dnsrecon",           "description": "Reconocimiento DNS: registros, subdominios y AXFR."},
+    {"name": "curl",        "category": "reconocimiento",   "url": "https://curl.se",                                    "description": "Cliente HTTP de línea de comandos; ver cabeceras y probar endpoints."},
+    {"name": "hydra",       "category": "explotacion",      "url": "https://github.com/vanhauser-thc/thc-hydra",         "description": "Fuerza bruta de credenciales sobre múltiples protocolos (SSH, RDP, HTTP...)."},
+    {"name": "searchsploit","category": "explotacion",      "url": "https://gitlab.com/exploit-database/exploitdb",      "description": "Búsqueda local de exploits de Exploit-DB por producto y versión."},
+    {"name": "Metasploit",  "category": "explotacion",      "url": "https://www.metasploit.com",                         "description": "Framework de explotación con módulos de exploits, auxiliares y payloads."},
+    {"name": "ffuf",        "category": "web-hacking",      "url": "https://github.com/ffuf/ffuf",                       "description": "Fuzzing web rápido de directorios, ficheros y parámetros."},
+    {"name": "gobuster",    "category": "web-hacking",      "url": "https://github.com/OJ/gobuster",                     "description": "Fuerza bruta de directorios, DNS y vhosts."},
+    {"name": "nikto",       "category": "web-hacking",      "url": "https://github.com/sullo/nikto",                     "description": "Escáner de vulnerabilidades y malas configuraciones en servidores web."},
+    {"name": "sqlmap",      "category": "web-hacking",      "url": "https://sqlmap.org",                                 "description": "Detección y explotación automática de inyección SQL."},
+    {"name": "Burp Suite",  "category": "web-hacking",      "url": "https://portswigger.net/burp",                       "description": "Proxy de interceptación para pruebas de aplicaciones web (Repeater, Intruder)."},
+    {"name": "Impacket",    "category": "post-explotacion", "url": "https://github.com/fortra/impacket",                 "description": "Herramientas Python para protocolos Windows (psexec, secretsdump, mssqlclient)."},
+    {"name": "xfreerdp",    "category": "post-explotacion", "url": "https://www.freerdp.com",                            "description": "Cliente RDP para Linux; conexión a escritorios remotos de Windows."},
+]
+
+
+def _seed_base_tools(_=None):
+    """Siembra el catálogo base de pentest UNA sola vez (primer arranque).
+
+    Las herramientas base van siempre en el módulo, marcadas con la etiqueta
+    'catalogo-base' para distinguirlas de las del usuario. Se siembra una única
+    vez (marcador en disco) A PROPÓSITO: así, si el usuario borra una base, no
+    reaparece al reiniciar; si la quiere de vuelta, la re-añade a mano como
+    cualquier otra. No hay boton de "catalogo base": están o el usuario las quitó.
+    """
+    marker = RUNTIME_DIR / ".tools_base_seeded"
+    if marker.exists():
+        return
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        for td in _TOOLS_SEED:
+            # No duplicamos una que ya exista con ese nombre (manual o de nota)
+            if db.query(Tool).filter(Tool.name.ilike(td["name"])).first():
+                continue
+            db.add(Tool(
+                name=td["name"], url=td.get("url"), description=td.get("description"),
+                category=td.get("category"), tool_type=td.get("tool_type", "software"),
+                requires_api=False, mention_count=1,
+                tags=json.dumps(["catalogo-base"]),
+            ))
+        db.commit()
+    finally:
+        db.close()
+    marker.write_text("1", encoding="utf-8")
 
 
 def _tool_dict(t: Tool) -> dict:
@@ -839,20 +956,26 @@ async def _edb_search(extra_params: dict, limit: int = 15):
         "start": "0", "length": str(limit),
         **extra_params,
     }
-    # Exploit-DB va detrás de Cloudflare y responde lento/intermitente (502, 429,
-    # timeouts). Un reintento absorbe la mayoría de los fallos transitorios.
+    # Exploit-DB va detrás de Cloudflare y responde lento/intermitente (502, 503,
+    # 429, timeouts). Reintentamos varias veces con backoff creciente para absorber
+    # esos fallos transitorios; los estados NO transitorios (p. ej. 403 = bloqueo)
+    # cortan el bucle porque insistir no ayuda y solo alarga la espera.
+    TRANSIENT = {429, 500, 502, 503, 504}
+    delays = [1.0, 2.0]                 # esperas entre intentos → len(delays)+1 intentos
     last_err = None
-    for attempt in range(2):
+    for attempt in range(len(delays) + 1):
         try:
             async with httpx.AsyncClient(timeout=20, headers=_EDB_HEADERS) as client:
                 r = await client.get("https://www.exploit-db.com/search", params=params)
             if r.status_code == 200:
                 return _edb_map(r.json().get("data", []), limit), None
             last_err = f"Exploit-DB devolvió HTTP {r.status_code}"
+            if r.status_code not in TRANSIENT:
+                break
         except Exception as e:
             last_err = str(e)
-        if attempt == 0:
-            await asyncio.sleep(1.2)
+        if attempt < len(delays):
+            await asyncio.sleep(delays[attempt])
     return [], last_err
 
 
@@ -1050,6 +1173,22 @@ def create_cve(data: CVECreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(row)
     return {"created": True, **_cve_dict(row)}
+
+
+@app.delete("/api/cves/{cid}", status_code=204)
+def delete_cve(cid: int, db: Session = Depends(get_db)):
+    """[Módulo CVEs] Borra un CVE de la KB (botón 🗑 de la tarjeta).
+
+    Da simetría con Herramientas, que ya tenía borrado. Antes un CVE guardado a
+    mano (sin nota asociada) no se podía quitar por ninguna vía. Se borra por id
+    numérico (PK), igual que DELETE /api/tools/{id}.
+    """
+    row = db.query(CVE).filter(CVE.id == cid).first()
+    if not row:
+        raise HTTPException(404, "CVE no encontrado en la base de datos")
+    db.delete(row)
+    db.commit()
+    return
 
 
 @app.post("/api/cves/{cve_id}/enrich")
@@ -1299,6 +1438,14 @@ def osint_history(db: Session = Depends(get_db)):
         }
         for r in rows
     ]
+
+
+@app.delete("/api/osint/history")
+def osint_history_clear(db: Session = Depends(get_db)):
+    """[Módulo OSINT] Vacía todo el historial de consultas (botón 🗑 Limpiar)."""
+    n = db.query(OsintResult).delete()
+    db.commit()
+    return {"deleted": n}
 
 
 @app.get("/api/osint/history/{result_id}")
@@ -1614,7 +1761,121 @@ def search_mitre(q: str = "", db: Session = Depends(get_db)):
     ]
 
 
+# ─── Catálogo de referencia ATT&CK (dataset compacto local) ───────────────────
+# MITRE no ofrece API REST para buscar técnicas, así que llevamos un JSON compacto
+# (id, nombre, tácticas, descripción corta) generado del STIX oficial v19.2. Sirve
+# para el buscador "añadir técnica" y para corregir la táctica de lo que detecta la
+# IA (ver _persist_mitre). La URL de cada técnica se deriva del ID, no se guarda.
+def _load_mitre_ref() -> list:
+    try:
+        with open(BUNDLE_DIR / "mitre_reference.json", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+_MITRE_REF = _load_mitre_ref()
+_MITRE_REF_BY_ID = {t["id"]: t for t in _MITRE_REF}
+
+
+@app.get("/api/mitre/reference")
+def mitre_reference(q: str = "", limit: int = 40):
+    """[Módulo MITRE] Busca en el catálogo de referencia ATT&CK (local) por ID
+    (T1055), nombre o táctica. Alimenta el buscador de "añadir técnica". Prioriza
+    las coincidencias de ID/nombre sobre las de táctica."""
+    query = (q or "").strip().lower()
+    if not query:
+        return {"count": 0, "results": []}
+
+    def score(t):
+        idl, nm = t["id"].lower(), t["name"].lower()
+        if idl == query: return 0
+        if idl.startswith(query): return 1
+        if query in idl: return 2
+        if nm.startswith(query): return 3
+        if query in nm: return 4
+        return 5
+
+    matches = [t for t in _MITRE_REF
+               if query in t["id"].lower() or query in t["name"].lower()
+               or any(query in tac.lower() for tac in t.get("tactics", []))]
+    matches.sort(key=score)
+    return {"count": len(matches), "results": matches[:limit]}
+
+
+class MitreCreate(BaseModel):
+    technique_id: str
+
+
+@app.post("/api/mitre", status_code=201)
+def create_mitre(data: MitreCreate, db: Session = Depends(get_db)):
+    """[Módulo MITRE] Añade una técnica a la KB desde el buscador de referencia.
+    Rellena nombre/táctica/descripción desde el catálogo. Upsert por technique_id
+    de las añadidas a mano (note_id NULL): si ya está, no la duplica."""
+    tid = (data.technique_id or "").strip().upper()
+    if not re.match(r"^T\d{4}(\.\d{3})?$", tid):
+        raise HTTPException(400, "ID de técnica inválido (esperado T#### o T####.###)")
+    ref = _MITRE_REF_BY_ID.get(tid)
+    if not ref:
+        raise HTTPException(404, f"{tid} no está en el catálogo de referencia ATT&CK")
+    existing = db.query(MitreTechnique).filter(
+        MitreTechnique.technique_id == tid, MitreTechnique.note_id.is_(None)).first()
+    if existing:
+        return {"created": False, "id": existing.id, "technique_id": tid}
+    mt = MitreTechnique(
+        note_id=None, technique_id=tid, technique_name=ref["name"],
+        tactic=(ref.get("tactics") or [None])[0], context_snippet=ref.get("desc"))
+    db.add(mt); db.commit(); db.refresh(mt)
+    return {"created": True, "id": mt.id, "technique_id": tid}
+
+
+@app.delete("/api/mitre/technique/{tid}", status_code=204)
+def delete_mitre_technique(tid: str, db: Session = Depends(get_db)):
+    """[Módulo MITRE] Quita una técnica del módulo POR COMPLETO: borra todas sus
+    filas (vengan de notas o añadidas a mano). Es lo que hace el 🗑 de la tarjeta,
+    que en la vista está agregada por técnica (2A)."""
+    tid = (tid or "").strip().upper()
+    rows = db.query(MitreTechnique).filter(MitreTechnique.technique_id == tid).all()
+    if not rows:
+        raise HTTPException(404, "Técnica no encontrada")
+    for r in rows:
+        db.delete(r)
+    db.commit()
+    return
+
+
+@app.delete("/api/mitre/{mid}", status_code=204)
+def delete_mitre(mid: int, db: Session = Depends(get_db)):
+    """[Módulo MITRE] Borra una fila concreta de técnica por su id numérico."""
+    row = db.query(MitreTechnique).filter(MitreTechnique.id == mid).first()
+    if not row:
+        raise HTTPException(404, "Técnica no encontrada")
+    db.delete(row); db.commit()
+    return
+
+
 # ─── Forensic Mode ────────────────────────────────────────────────────────────
+
+def _family_from_vt_label(label: str) -> str:
+    """Extrae la familia de la etiqueta sugerida de VT: 'ransomware.wannacry/x'
+    → 'Wannacry'. Se usa solo como respaldo de la firma de MalwareBazaar."""
+    if not label:
+        return ""
+    core = label.split(".", 1)[1] if "." in label else label   # quita la categoría
+    fam = core.split("/")[0].strip()                           # familia antes de la variante
+    return fam.capitalize()
+
+
+@app.get("/api/forensic/keys")
+def forensic_keys():
+    """[Módulo Forense] Presencia de las keys que usa el pipeline. Lo usa el
+    frontend para avisar antes de analizar si falta alguna esencial. Solo dice si
+    están puestas (no si son válidas — eso se comprueba al analizar de verdad)."""
+    return {
+        "virustotal":    bool(osint.VT_KEY),
+        "malwarebazaar": bool(osint.MALWAREBAZAAR_KEY),
+        "anyrun":        bool(osint.ANYRUN_KEY),
+    }
+
 
 @app.post("/api/forensic/analyze")
 async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
@@ -1622,13 +1883,46 @@ async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
     import asyncio
 
     hash_str = hash.strip().lower()
-    if len(hash_str) != 64 or not re.match(r"^[0-9a-f]{64}$", hash_str):
-        raise HTTPException(400, "Se requiere hash SHA256 (64 caracteres hexadecimales)")
+    if not re.match(r"^[0-9a-f]{32}$|^[0-9a-f]{40}$|^[0-9a-f]{64}$", hash_str):
+        raise HTTPException(400, "Hash inválido — se admite MD5 (32), SHA1 (40) o SHA256 (64 hex)")
 
     # ── Step 1+2: VT + MalwareBazaar in parallel ──────────────────────────────
     vt_task  = osint.hash_vt(hash_str)
     mb_task  = osint.hash_malwarebazaar(hash_str)
     vt_data, mb_data = await asyncio.gather(vt_task, mb_task)
+
+    # ── 1C: chequeo de keys ───────────────────────────────────────────────────
+    # Si una key esencial no está o no funciona (auth_error), paramos ANTES de
+    # gastar la IA y avisamos. MalwareBazaar solo consulta SHA256; con MD5/SHA1
+    # su error no es de key, así que solo cuenta como fallo de key si es SHA256.
+    bad_keys = []
+    if vt_data.get("auth_error"):
+        bad_keys.append("VirusTotal")
+    if mb_data.get("auth_error") and len(hash_str) == 64:
+        bad_keys.append("MalwareBazaar")
+    if bad_keys:
+        raise HTTPException(400, "API keys no configuradas o inválidas: "
+                            + ", ".join(bad_keys) + ". Configúralas en Ajustes (⚙).")
+
+    # ── 2A: sin datos → no alucinar ───────────────────────────────────────────
+    # Si ni VT ni MalwareBazaar tienen datos del hash (desconocido/nunca subido),
+    # NO llamamos a la IA (inventaría el informe): guardamos una nota honesta.
+    if vt_data.get("error") and mb_data.get("error"):
+        title = f"Análisis forense — {hash_str[:16]} — sin datos"
+        body = (f"**Hash**: `{hash_str}`\n\n## Sin datos de reputación\n"
+                "Ni VirusTotal ni MalwareBazaar tienen información de este hash "
+                "(muestra desconocida o nunca subida). No se genera análisis para "
+                "no especular sin datos.\n\n"
+                f"- VirusTotal: {vt_data.get('error', '—')}\n"
+                f"- MalwareBazaar: {mb_data.get('error', '—')}\n")
+        n = Note(title=title, content=body, category="forense",
+                 subcategory="malware-analysis", summary="Hash sin datos de reputación",
+                 tags=json.dumps(["forense", "malware", "sin-datos", "veredicto:sin-datos"]),
+                 source_file=f"forensic:{hash_str[:16]}")
+        db.add(n); db.commit(); db.refresh(n)
+        return {"note_id": n.id, "title": title, "vt": vt_data, "mb": mb_data,
+                "anyrun": {"note": "no consultado (sin datos)"}, "timeline": {},
+                "cves_found": 0, "mitre_found": 0, "tags": ["sin-datos"], "no_data": True}
 
     # ── Step 3: Any.run if VT detections > 5 ─────────────────────────────────
     anyrun_data: dict = {"note": "No consultado (score VT ≤ 5 o error)"}
@@ -1640,9 +1934,9 @@ async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
     note_data = ai.generate_forensic_note(hash_str, vt_data, mb_data, anyrun_data)
 
     # ── Step 5: Persist note ──────────────────────────────────────────────────
-    from datetime import date as _date
     title = note_data.get("title") or f"Análisis forense — {hash_str[:16]}"
     content_body = note_data.get("content", "")
+    htype = {32: "MD5", 40: "SHA1", 64: "SHA256"}.get(len(hash_str), "Hash")
 
     # Prepend timeline block to content
     tl = note_data.get("timeline", {})
@@ -1656,11 +1950,31 @@ async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
     if tl_md:
         content_body = f"## Timeline\n{tl_md}\n\n" + content_body
 
-    # Include raw hash at top
-    content_body = f"**SHA256**: `{hash_str}`\n\n" + content_body
+    # Include raw hash at top (con su tipo real: MD5/SHA1/SHA256)
+    content_body = f"**{htype}**: `{hash_str}`\n\n" + content_body
 
+    # Veredicto de 2 palabras para el histórico (según detecciones de VirusTotal;
+    # si VT no dio score pero MalwareBazaar sí conoce el hash, es malware conocido).
+    det = vt_data.get("detected", 0) if not vt_data.get("error") else None
+    if det is not None:
+        verdict = "limpio" if det == 0 else ("sospechoso" if det <= 4 else "infeccion")
+    else:
+        verdict = "infeccion" if not mb_data.get("error") else "sin-datos"
+
+    # Nombre de familia SOLO si lo tenemos con confianza: la firma curada de
+    # MalwareBazaar, o (con muchas detecciones) la etiqueta sugerida de VT. Si no,
+    # el histórico se queda con el veredicto genérico ("Posible infección"…).
+    familia = ""
+    if not mb_data.get("error") and mb_data.get("signature"):
+        familia = str(mb_data["signature"]).strip()
+    elif det and det >= 5 and vt_data.get("suggested_label"):
+        familia = _family_from_vt_label(vt_data["suggested_label"])
+
+    base_tags = ["forense", "malware", "veredicto:" + verdict]
+    if familia:
+        base_tags.append("familia:" + familia)
     tags = note_data.get("tags", [])
-    tags_json = json.dumps(list(set(["forense", "malware"] + tags)))
+    tags_json = json.dumps(list(set(base_tags + tags)))
 
     n = Note(
         title=title,
