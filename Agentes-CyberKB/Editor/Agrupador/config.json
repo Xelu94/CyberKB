@@ -56,7 +56,6 @@
   "sistemas_comando": ["linux", "windows", "powershell", "google", "both"],
 
   "limites": {
-    "caracteres_minimos": 200,
     "max_entidades": 30,
     "max_relaciones": 40,
     "max_comandos": 15,
@@ -70,7 +69,7 @@
 
   "bbdd": {
     "url": "http://localhost:8000/api/bbdd/ingesta",
-    "timeout_segundos": 60
+    "timeout_segundos": 120
   },
 
   "salida": {
@@ -78,7 +77,6 @@
   },
 
   "errores": {
-    "generico": "Ha habido un error",
-    "resumen_corto": "El resumen es demasiado corto para agrupar."
+    "generico": "Ha habido un error"
   }
 }

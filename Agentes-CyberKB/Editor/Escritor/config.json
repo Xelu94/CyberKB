@@ -1,7 +1,7 @@
 {
   "modelo": {
-    "id": "claude-opus-5",
-    "respaldo": "claude-opus-4-8",
+    "id": "claude-sonnet-5",
+    "respaldo": null,
     "max_tokens": 16000,
     "effort": "medium"
   },
@@ -9,7 +9,7 @@
   "limites": {
     "min_caracteres_entrada": 4000,
     "extensiones": [".pdf", ".odt", ".txt", ".md", ".log"],
-    "timeout_agrupador_segundos": 30
+    "timeout_agrupador_segundos": 120
   },
 
   "mensajes": {

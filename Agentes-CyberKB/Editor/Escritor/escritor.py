@@ -105,7 +105,7 @@ def _cliente() -> anthropic.Anthropic:
 
 
 def _resumir(texto: str) -> dict:
-    respuesta = _cliente().beta.messages.create(
+    argumentos = dict(
         model=MODELO["id"],
         max_tokens=MODELO["max_tokens"],
         system=_prompt_sistema(),
@@ -115,11 +115,15 @@ def _resumir(texto: str) -> dict:
             "effort": MODELO["effort"],
             "format": {"type": "json_schema", "schema": ESQUEMA_RESUMEN},
         },
-        # Un corpus de ciberseguridad puede activar el clasificador de seguridad;
-        # el reintento en el modelo de respaldo evita perder el documento.
-        betas=["server-side-fallback-2026-06-01"],
-        fallbacks=[{"model": MODELO["respaldo"]}],
     )
+    # No todos los modelos tienen un modelo de respaldo valido (verificado via
+    # GET /v1/models/<id> con el beta de fallback, 2026-09-28) -- el parametro
+    # solo se manda si hay uno configurado.
+    if MODELO.get("respaldo"):
+        argumentos["betas"] = ["server-side-fallback-2026-06-01"]
+        argumentos["fallbacks"] = [{"model": MODELO["respaldo"]}]
+
+    respuesta = _cliente().beta.messages.create(**argumentos)
 
     if respuesta.stop_reason == "refusal":
         raise RuntimeError("el modelo declino resumir el documento")
@@ -238,7 +242,7 @@ def _procesar(texto: str, origen: Literal["app", "cinefilo"], nombre: str) -> di
 
 
 @router.post("/resumen")
-async def resumir_desde_app(file: UploadFile = File(...), titulo: str | None = Form(None)):
+def resumir_desde_app(file: UploadFile = File(...), titulo: str | None = Form(None)):
     """Entrada de la app: el usuario sube un documento."""
     ext = Path(file.filename).suffix.lower()
     if ext not in EXTENSIONES:
@@ -258,8 +262,12 @@ async def resumir_desde_app(file: UploadFile = File(...), titulo: str | None = F
 
 
 @router.post("/resumen-agente")
-async def resumir_desde_cinefilo(data: TextoAgente):
-    """Entrada del agente Cinefilo: texto ya extraido."""
+def resumir_desde_cinefilo(data: TextoAgente):
+    """Entrada del agente Cinefilo: texto ya extraido.
+
+    Sincrono: llama de vuelta a Agrupador en este mismo servidor. Ver la nota
+    en `cinefilo.transcribir` sobre por que no puede ser `async def`.
+    """
     return _procesar(data.texto, "cinefilo", data.titulo or data.origen_id or "cinefilo")
 
 

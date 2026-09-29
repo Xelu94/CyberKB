@@ -121,10 +121,10 @@ ESQUEMA = _objeto({
         "type": TEXTO,
         "description": TEXTO,
     }),
-    "relations": {
-        "type": "array",
-        "items": {"type": "array", "items": TEXTO, "minItems": 2, "maxItems": 2},
-    },
+    # Un par [a, b] como array de 2 elementos no es representable: la API de
+    # Claude rechaza minItems/maxItems distintos de 0 o 1 en arrays de un
+    # json_schema de salida. Se modela como objeto {a, b} en su lugar.
+    "relations": _lista({"a": TEXTO, "b": TEXTO}),
 })
 
 
@@ -261,12 +261,15 @@ def _validar(bruto: dict) -> dict:
     entidades = _unicos(entidades, "name", LIMITES["max_entidades"])
 
     # Una relacion hacia una entidad que no existe deja un nodo huerfano en el grafo.
+    # El modelo entrega cada par como {"a": ..., "b": ...} (ver ESQUEMA), pero de
+    # aqui hacia abajo (validacion, Agente-BBDD, documentacion) se sigue tratando
+    # como el par [a, b] de siempre -- el cambio de forma queda aislado aqui.
     nombres = {e["name"].lower(): e["name"] for e in entidades}
     relaciones: list[list[str]] = []
     for par in bruto.get("relations") or []:
-        if not isinstance(par, list) or len(par) != 2:
+        if not isinstance(par, dict):
             continue
-        a, b = nombres.get(_texto(par[0]).lower()), nombres.get(_texto(par[1]).lower())
+        a, b = nombres.get(_texto(par.get("a")).lower()), nombres.get(_texto(par.get("b")).lower())
         if a and b and a != b and [a, b] not in relaciones and [b, a] not in relaciones:
             relaciones.append([a, b])
 
@@ -305,11 +308,9 @@ def _entregar(url: str, timeout: float, payload: dict) -> bool:
 
 
 def _procesar(resumen: ResumenEscritor) -> dict:
-    # No es un fallo al agrupar, sino material insuficiente: lleva mensaje propio
-    # porque reintentar con el mismo texto no puede arreglarlo.
-    if _visibles(resumen.resumen) < LIMITES["caracteres_minimos"]:
-        raise HTTPException(422, ERRORES["resumen_corto"])
-
+    # Sin minimo de caracteres a proposito: la app tambien manda aqui texto corto
+    # y concreto (un comando, una CVE, una ficha de herramienta) via /api/analyze,
+    # que no tiene por que llegar a ningun umbral de longitud (2026-09-28).
     try:
         agrupacion = _validar(_clasificar(resumen))
     except Exception:
@@ -343,6 +344,10 @@ def _procesar(resumen: ResumenEscritor) -> dict:
 
 
 @router.post("/agrupar")
-async def agrupar(resumen: ResumenEscritor):
-    """Entrada del Escritor: el resumen ya validado como ciberseguridad."""
+def agrupar(resumen: ResumenEscritor):
+    """Entrada del Escritor: el resumen ya validado como ciberseguridad.
+
+    Sincrono: llama de vuelta a Agente-BBDD en este mismo servidor. Ver la
+    nota en `cinefilo.transcribir` sobre por que no puede ser `async def`.
+    """
     return _procesar(resumen)

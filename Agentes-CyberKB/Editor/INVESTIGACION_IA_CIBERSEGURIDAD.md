@@ -146,14 +146,9 @@ deepfake y el malware asistido por IA como causas principales.
 
 ---
 
-## D. Por qué esto importa para el esquema del Agrupador (sin decidir nada)
+## D. Por qué esto importa para el esquema del Agrupador
 
-Recapitulando el hallazgo de antes en esta conversación: las 16 categorías fijas
-del Agrupador y las 14 tácticas MITRE que extrae son del **pentesting/red-team
-clásico**. Esta investigación confirma que existe un campo paralelo, con
-autoridades propias y ya consolidado (OWASP LLM Top 10, MITRE ATLAS, NIST AI RMF),
-que hoy no tiene representación en el esquema. Es información para decidir más
-adelante si se amplía — no una recomendación de que haya que hacerlo ya.
+Pendiente de decidir si se amplía el esquema — ver `MEJORAS_A_FUTURO.md`.
 
 ## Fuentes
 

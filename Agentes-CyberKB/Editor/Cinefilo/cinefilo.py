@@ -316,22 +316,29 @@ def _clasificar(contenido: str, modo: str) -> dict:
     if not api_key:
         raise _error_generico()
 
+    formato = {"type": "json_schema", "schema": ESQUEMA_CLASIFICACION}
+    argumentos = dict(
+        model=CLASIFICADOR["modelo"],
+        max_tokens=CLASIFICADOR["max_tokens"],
+        system=(BASE_DIR / "prompt.md").read_text(encoding="utf-8"),
+        messages=[{"role": "user", "content": f"MODO: {modo}\n\n{contenido}"}],
+    )
+    # Haiku no soporta thinking adaptativo ni el parametro effort (verificado
+    # contra la API real, 2026-09-28) -- solo se anaden si el modelo los admite.
+    if "haiku" not in CLASIFICADOR["modelo"]:
+        argumentos["thinking"] = {"type": "adaptive"}
+        argumentos["output_config"] = {"effort": CLASIFICADOR["effort"], "format": formato}
+    else:
+        argumentos["output_config"] = {"format": formato}
+    # No todos los modelos tienen un modelo de respaldo valido (Haiku y Sonnet
+    # no tienen ninguno en esta cuenta, verificado via GET /v1/models/<id> con
+    # el beta de fallback) -- el parametro solo se manda si hay uno configurado.
+    if CLASIFICADOR.get("modelo_respaldo"):
+        argumentos["betas"] = ["server-side-fallback-2026-06-01"]
+        argumentos["fallbacks"] = [{"model": CLASIFICADOR["modelo_respaldo"]}]
+
     try:
-        respuesta = anthropic.Anthropic(api_key=api_key).beta.messages.create(
-            model=CLASIFICADOR["modelo"],
-            max_tokens=CLASIFICADOR["max_tokens"],
-            system=(BASE_DIR / "prompt.md").read_text(encoding="utf-8"),
-            messages=[{"role": "user", "content": f"MODO: {modo}\n\n{contenido}"}],
-            thinking={"type": "adaptive"},
-            output_config={
-                "effort": CLASIFICADOR["effort"],
-                "format": {"type": "json_schema", "schema": ESQUEMA_CLASIFICACION},
-            },
-            # Un corpus de amenazas puede activar el clasificador de seguridad;
-            # el reintento en el modelo de respaldo evita perder el video.
-            betas=["server-side-fallback-2026-06-01"],
-            fallbacks=[{"model": CLASIFICADOR["modelo_respaldo"]}],
-        )
+        respuesta = anthropic.Anthropic(api_key=api_key).beta.messages.create(**argumentos)
     except Exception:
         raise _error_generico()
 
@@ -462,6 +469,14 @@ def _ejecutar(url: str, titulo: str | None) -> dict:
 
 
 @router.post("/transcribir")
-async def transcribir(peticion: PeticionVideo):
-    """Entrada de la app: el usuario pega la URL de un video."""
+def transcribir(peticion: PeticionVideo):
+    """Entrada de la app: el usuario pega la URL de un video.
+
+    Sincrono a proposito: el cuerpo hace trabajo bloqueante (yt-dlp, ffmpeg,
+    llamadas de red sincronas) e incluye una llamada HTTP de vuelta a este
+    mismo servidor (Escritor). Como `def` normal, Starlette lo ejecuta en un
+    threadpool y libera el event loop para atender esa llamada; declarado
+    `async def` sin awaits, bloquea el loop entero y esa llamada nunca se
+    atiende hasta agotar el timeout (verificado con un video real, 2026-09-28).
+    """
     return _procesar(peticion.url, peticion.titulo)
