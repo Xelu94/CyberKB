@@ -6,7 +6,7 @@ from models import Command
 import json
 
 
-from layers.routers_functions import _tool_dict, _cmd_dict, ToolUpdate
+from layers.routers_functions import _tool_dict, _cmd_dict, ToolUpdate, ToolCreate
 
 
 router = APIRouter()
@@ -49,5 +49,45 @@ def update_tool(tool_id: int, data: ToolUpdate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(t)
     return _tool_dict(t)
+
+
+@router.post("/api/tools", status_code=201)
+def create_tool(data: ToolCreate, db: Session = Depends(get_db)):
+    """Crea una herramienta a mano. Si ya existe una con ese nombre, sube su
+    contador de menciones en vez de duplicarla (upsert por nombre)."""
+    name = (data.name or "").strip()
+    if not name:
+        raise HTTPException(400, "El nombre es obligatorio")
+    existing = db.query(Tool).filter(Tool.name.ilike(name)).first()
+    if existing:
+        existing.mention_count = (existing.mention_count or 0) + 1
+        db.commit()
+        db.refresh(existing)
+        return {"created": False, **_tool_dict(existing)}
+    t = Tool(
+        name=name,
+        url=data.url or None,
+        description=data.description or None,
+        category=data.category or None,
+        tool_type=data.tool_type or "software",
+        requires_api=bool(data.requires_api),
+        api_info=data.api_info or None,
+        mention_count=1,
+    )
+    db.add(t)
+    db.commit()
+    db.refresh(t)
+    return {"created": True, **_tool_dict(t)}
+
+
+@router.delete("/api/tools/{tool_id}", status_code=204)
+def delete_tool(tool_id: int, db: Session = Depends(get_db)):
+    """Borra una herramienta (p. ej. un falso positivo del análisis por IA)."""
+    t = db.query(Tool).filter(Tool.id == tool_id).first()
+    if not t:
+        raise HTTPException(404, "Tool not found")
+    db.delete(t)
+    db.commit()
+    return
 
 

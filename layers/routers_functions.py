@@ -42,6 +42,16 @@ class ToolUpdate(BaseModel):
     api_info: Optional[str] = None
 
 
+class ToolCreate(BaseModel):
+    name: str
+    url: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    tool_type: Optional[str] = "software"
+    requires_api: Optional[bool] = False
+    api_info: Optional[str] = None
+
+
 class CommandIn(BaseModel):
     command: str
     description: Optional[str] = None

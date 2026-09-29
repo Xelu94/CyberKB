@@ -14,6 +14,18 @@ from layers.routers_functions import _persist_mitre, _persist_entities
 router = APIRouter()
 
 
+@router.get("/api/forensic/keys")
+def forensic_keys():
+    """[Módulo Forense] Presencia de las keys que usa el pipeline. Lo usa el
+    frontend para avisar antes de analizar si falta alguna esencial. Solo dice si
+    están puestas (no si son válidas — eso se comprueba al analizar de verdad)."""
+    return {
+        "virustotal":    bool(osint.VT_KEY),
+        "malwarebazaar": bool(osint.MALWAREBAZAAR_KEY),
+        "anyrun":        bool(osint.ANYRUN_KEY),
+    }
+
+
 @router.post("/api/forensic/analyze")
 async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
     """Full forensic pipeline: VT + MalwareBazaar (parallel) → Any.run (conditional) → AI note."""
