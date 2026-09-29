@@ -69,7 +69,7 @@
 
   "bbdd": {
     "url": "http://localhost:8000/api/bbdd/ingesta",
-    "timeout_segundos": 60
+    "timeout_segundos": 120
   },
 
   "salida": {

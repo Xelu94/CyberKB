@@ -754,12 +754,14 @@ def _reanalizar_con_agrupador(n: Note, db: Session) -> dict:
     duplicado) y actualice tools/commands/cves/mitre/entidades a la vez -- no
     solo entidades, unificado con /api/analyze y /api/upload (2026-09-28).
 
-    Restaura category/subcategory/tags despues: a diferencia de una ingesta
-    nueva, aqui la nota ya existia y pudo haberse curado a mano -- reanalizar
-    el grafo no debe pisar esa clasificacion con la que Agrupador adivine de
-    cero (confirmado con datos reales que si lo hacia, 2026-09-29)."""
-    categoria, subcategoria, tags = n.category, n.subcategory, n.tags
-
+    source="app-reextract" le dice a Agente-BBDD que NO toque
+    category/subcategory/tags de la nota (ver agente_bbdd._nota()) -- a
+    diferencia de una ingesta nueva, aqui la nota ya existia y pudo haberse
+    curado a mano. Antes esto se "arreglaba" aqui mismo, restaurando los
+    valores despues de la llamada; era una carrera de tiempos (si Agente-BBDD
+    tardaba mas que el timeout del llamador y terminaba tarde en segundo
+    plano, su commit tardio pisaba la restauracion igualmente, visto con
+    datos reales el mismo dia). Arreglado en el origen, en Agente-BBDD."""
     resumen = ResumenEscritor(
         id=uuid.uuid4().hex,
         titulo=n.title,
@@ -767,13 +769,7 @@ def _reanalizar_con_agrupador(n: Note, db: Session) -> dict:
         source="app-reextract",
         archivo_original=n.source_file,
     )
-    resultado = _agrupador_procesar(resumen)
-
-    db.refresh(n)
-    n.category, n.subcategory, n.tags = categoria, subcategoria, tags
-    db.commit()
-
-    return resultado
+    return _agrupador_procesar(resumen)
 
 
 @app.post("/api/notes/{note_id}/extract")
@@ -1701,7 +1697,8 @@ async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
     try:
         _reanalizar_con_agrupador(n, db)
     except Exception:
-        pass
+        import traceback
+        traceback.print_exc()
 
     return {
         "note_id":    n.id,

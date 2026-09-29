@@ -135,9 +135,19 @@ def _nota(db: Session, datos: Agrupacion) -> Note:
     else:
         _fusionar(fila, "content", datos.resumen)
         _fusionar(fila, "summary", datos.resumen)
-        _fusionar(fila, "category", _texto(datos.category, LONGITUDES["note_category"]))
-        _fusionar(fila, "subcategory", _texto(datos.subcategory, LONGITUDES["note_subcategory"]))
-        _fusionar(fila, "tags", etiquetas)
+        # Un reanalisis (extract/reindex-all/forense) no debe pisar la
+        # categoria/tags de una nota que ya existia -- pudo haberse curado a
+        # mano, o venir de una clasificacion especializada (Forense). Solo se
+        # actualizan en una ingesta nueva real (source distinto de
+        # "app-reextract"). Antes esto se "arreglaba" restaurando el valor
+        # desde main.py despues de esta llamada, pero era una carrera de
+        # tiempos: si esta peticion tardaba mas que el timeout del llamador,
+        # el commit de aqui llegaba tarde y pisaba la restauracion igualmente
+        # (visto con datos reales, 2026-09-29). Arreglado en el origen.
+        if datos.source != "app-reextract":
+            _fusionar(fila, "category", _texto(datos.category, LONGITUDES["note_category"]))
+            _fusionar(fila, "subcategory", _texto(datos.subcategory, LONGITUDES["note_subcategory"]))
+            _fusionar(fila, "tags", etiquetas)
 
     db.flush()
     return fila

@@ -88,10 +88,40 @@ por encima, no sustituye ese primer paso. Ruido conocido y aceptado: puede
 colarse alguna fuente de datos (VirusTotal, MalwareBazaar) como fila en
 `tools`.
 
-No se pudo probar el endpoint real de punta a punta (sin `VIRUSTOTAL_API_KEY`/
-`MALWAREBAZAAR_API_KEY`/`ANYRUN_API_KEY` en `.env`), pero la función que ahora
-llama (`_reanalizar_con_agrupador`) es la misma, con la misma firma, que ya se
-verificó a fondo con datos reales en la prueba de arriba.
+**Probado de punta a punta el mismo día (2026-09-29), sin claves de VT/
+MalwareBazaar/Any.run** (`hash_vt`/`hash_malwarebazaar`/`anyrun_lookup`
+degradan con un dict de error en vez de fallar, así que el endpoint real se
+pudo ejecutar igualmente) — y esto destapó un bug real en el propio arreglo
+de arriba:
+
+**Bug encontrado**: la primera implementación "restauraba" category/
+subcategory/tags en `main.py` *después* de llamar a Agrupador
+(`db.refresh(n)` + reasignar + `db.commit()`). Funcionaba en pruebas cortas,
+pero era una **carrera de tiempos**: si Agente-BBDD tardaba más que el
+timeout del llamador (Agrupador→BBDD, 60s) y Agrupador se rendía
+(`bbdd_entregado: false`), Agente-BBDD seguía terminando en segundo plano
+(mismo patrón de "se completa tarde" que el de Escritor→Agrupador de por la
+mañana) y su commit tardío volvía a pisar la restauración — sin que
+`main.py` se enterara ni tuviera forma de reaccionar. Reproducido dos veces
+con el hash real de EICAR: `category` acababa en `malware` en vez de
+`forense`, aunque los logs de depuración mostraban la restauración
+ejecutándose correctamente *en el momento* (el problema era el commit
+posterior de BBDD, no la lógica de `main.py`).
+
+**Arreglo real, en el origen**: `Agente-BBDD/agente_bbdd.py::_nota()` ahora
+comprueba `datos.source` — si es `"app-reextract"` (lo que manda
+`_reanalizar_con_agrupador`), **no toca** `category`/`subcategory`/`tags` de
+una nota existente, sea cual sea el orden o el timing en que lleguen los
+commits. Se quitó el código de restauración de `main.py` (ya no hace falta).
+De paso se subieron también los timeouts `Agrupador→BBDD` y
+`Agente-BBDD→Obsi` de 60s a 120s (mismo motivo que el de
+`Escritor→Agrupador` por la mañana), aunque el arreglo real ya no depende de
+que el timeout sea suficiente.
+
+**Verificado con el hash real de EICAR tras el arreglo**: `category='forense'`,
+`subcategory='malware-analysis'` preservados, 5 tools y 4 técnicas MITRE
+extraídas por Agrupador, 1 sola nota (sin duplicar), petición completa en
+~3m30s.
 
 ---
 
