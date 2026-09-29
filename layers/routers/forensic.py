@@ -14,6 +14,16 @@ from layers.routers_functions import _persist_mitre, _persist_entities
 router = APIRouter()
 
 
+def _family_from_vt_label(label: str) -> str:
+    """Extrae la familia de la etiqueta sugerida de VT: 'ransomware.wannacry/x'
+    → 'Wannacry'. Se usa solo como respaldo de la firma de MalwareBazaar."""
+    if not label:
+        return ""
+    core = label.split(".", 1)[1] if "." in label else label   # quita la categoría
+    fam = core.split("/")[0].strip()                           # familia antes de la variante
+    return fam.capitalize()
+
+
 @router.get("/api/forensic/keys")
 def forensic_keys():
     """[Módulo Forense] Presencia de las keys que usa el pipeline. Lo usa el
@@ -32,13 +42,46 @@ async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
     import asyncio
 
     hash_str = hash.strip().lower()
-    if len(hash_str) != 64 or not re.match(r"^[0-9a-f]{64}$", hash_str):
-        raise HTTPException(400, "Se requiere hash SHA256 (64 caracteres hexadecimales)")
+    if not re.match(r"^[0-9a-f]{32}$|^[0-9a-f]{40}$|^[0-9a-f]{64}$", hash_str):
+        raise HTTPException(400, "Hash inválido — se admite MD5 (32), SHA1 (40) o SHA256 (64 hex)")
 
     # ── Step 1+2: VT + MalwareBazaar in parallel ──────────────────────────────
     vt_task  = osint.hash_vt(hash_str)
     mb_task  = osint.hash_malwarebazaar(hash_str)
     vt_data, mb_data = await asyncio.gather(vt_task, mb_task)
+
+    # ── 1C: chequeo de keys ───────────────────────────────────────────────────
+    # Si una key esencial no está o no funciona (auth_error), paramos ANTES de
+    # gastar la IA y avisamos. MalwareBazaar solo consulta SHA256; con MD5/SHA1
+    # su error no es de key, así que solo cuenta como fallo de key si es SHA256.
+    bad_keys = []
+    if vt_data.get("auth_error"):
+        bad_keys.append("VirusTotal")
+    if mb_data.get("auth_error") and len(hash_str) == 64:
+        bad_keys.append("MalwareBazaar")
+    if bad_keys:
+        raise HTTPException(400, "API keys no configuradas o inválidas: "
+                            + ", ".join(bad_keys) + ". Configúralas en Ajustes (⚙).")
+
+    # ── 2A: sin datos → no alucinar ───────────────────────────────────────────
+    # Si ni VT ni MalwareBazaar tienen datos del hash (desconocido/nunca subido),
+    # NO llamamos a la IA (inventaría el informe): guardamos una nota honesta.
+    if vt_data.get("error") and mb_data.get("error"):
+        title = f"Análisis forense — {hash_str[:16]} — sin datos"
+        body = (f"**Hash**: `{hash_str}`\n\n## Sin datos de reputación\n"
+                "Ni VirusTotal ni MalwareBazaar tienen información de este hash "
+                "(muestra desconocida o nunca subida). No se genera análisis para "
+                "no especular sin datos.\n\n"
+                f"- VirusTotal: {vt_data.get('error', '—')}\n"
+                f"- MalwareBazaar: {mb_data.get('error', '—')}\n")
+        n = Note(title=title, content=body, category="forense",
+                 subcategory="malware-analysis", summary="Hash sin datos de reputación",
+                 tags=json.dumps(["forense", "malware", "sin-datos", "veredicto:sin-datos"]),
+                 source_file=f"forensic:{hash_str[:16]}")
+        db.add(n); db.commit(); db.refresh(n)
+        return {"note_id": n.id, "title": title, "vt": vt_data, "mb": mb_data,
+                "anyrun": {"note": "no consultado (sin datos)"}, "timeline": {},
+                "cves_found": 0, "mitre_found": 0, "tags": ["sin-datos"], "no_data": True}
 
     # ── Step 3: Any.run if VT detections > 5 ─────────────────────────────────
     anyrun_data: dict = {"note": "No consultado (score VT ≤ 5 o error)"}
@@ -53,6 +96,7 @@ async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
     from datetime import date as _date
     title = note_data.get("title") or f"Análisis forense — {hash_str[:16]}"
     content_body = note_data.get("content", "")
+    htype = {32: "MD5", 40: "SHA1", 64: "SHA256"}.get(len(hash_str), "Hash")
 
     # Prepend timeline block to content
     tl = note_data.get("timeline", {})
@@ -66,11 +110,31 @@ async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
     if tl_md:
         content_body = f"## Timeline\n{tl_md}\n\n" + content_body
 
-    # Include raw hash at top
-    content_body = f"**SHA256**: `{hash_str}`\n\n" + content_body
+    # Include raw hash at top (con su tipo real: MD5/SHA1/SHA256)
+    content_body = f"**{htype}**: `{hash_str}`\n\n" + content_body
 
+    # Veredicto de 2 palabras para el histórico (según detecciones de VirusTotal;
+    # si VT no dio score pero MalwareBazaar sí conoce el hash, es malware conocido).
+    det = vt_data.get("detected", 0) if not vt_data.get("error") else None
+    if det is not None:
+        verdict = "limpio" if det == 0 else ("sospechoso" if det <= 4 else "infeccion")
+    else:
+        verdict = "infeccion" if not mb_data.get("error") else "sin-datos"
+
+    # Nombre de familia SOLO si lo tenemos con confianza: la firma curada de
+    # MalwareBazaar, o (con muchas detecciones) la etiqueta sugerida de VT. Si no,
+    # el histórico se queda con el veredicto genérico ("Posible infección"…).
+    familia = ""
+    if not mb_data.get("error") and mb_data.get("signature"):
+        familia = str(mb_data["signature"]).strip()
+    elif det and det >= 5 and vt_data.get("suggested_label"):
+        familia = _family_from_vt_label(vt_data["suggested_label"])
+
+    base_tags = ["forense", "malware", "veredicto:" + verdict]
+    if familia:
+        base_tags.append("familia:" + familia)
     tags = note_data.get("tags", [])
-    tags_json = json.dumps(list(set(["forense", "malware"] + tags)))
+    tags_json = json.dumps(list(set(base_tags + tags)))
 
     n = Note(
         title=title,

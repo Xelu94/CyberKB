@@ -224,10 +224,35 @@ def _persist_cves(cves: list, note: Note, db: Session):
     db.commit()
 
 
+# ─── Catálogo de referencia ATT&CK (dataset compacto local, STIX v19.2) ───────
+# Lo usan el buscador "añadir técnica" (router mitre) y _persist_mitre, para
+# corregir la táctica/nombre de lo que detecta la IA. La URL se deriva del ID.
+def _mitre_ref_path() -> Path:
+    base = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
+    return base / "mitre_reference.json"
+
+
+def _load_mitre_ref() -> list:
+    try:
+        with open(_mitre_ref_path(), encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+_MITRE_REF = _load_mitre_ref()
+_MITRE_REF_BY_ID = {t["id"]: t for t in _MITRE_REF}
+
+
 def _persist_mitre(techniques: list, note: Note, db: Session):
-    """Upsert MITRE ATT&CK techniques extracted from a note."""
+    """Upsert de técnicas ATT&CK extraídas de una nota.
+
+    Si el ID está en el catálogo de referencia (mitre_reference.json), usamos su
+    táctica/nombre canónicos en lugar de los que devuelve la IA (que a veces se
+    equivoca de táctica); así nada cae en "Uncategorized" por un fallo del modelo.
+    """
     for td in techniques:
-        tid = td.get("id", "").strip()
+        tid = td.get("id", "").strip().upper()
         if not tid:
             continue
         existing = db.query(MitreTechnique).filter(
@@ -235,11 +260,12 @@ def _persist_mitre(techniques: list, note: Note, db: Session):
             MitreTechnique.note_id == note.id
         ).first()
         if not existing:
+            ref = _MITRE_REF_BY_ID.get(tid)
             mt = MitreTechnique(
                 note_id=note.id,
                 technique_id=tid,
-                technique_name=td.get("name"),
-                tactic=td.get("tactic"),
+                technique_name=(ref["name"] if ref else td.get("name")),
+                tactic=((ref.get("tactics") or [None])[0] if ref else td.get("tactic")),
                 context_snippet=td.get("snippet"),
             )
             db.add(mt)

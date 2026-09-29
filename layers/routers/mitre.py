@@ -3,35 +3,13 @@ from database import get_db
 from sqlalchemy.orm import Session
 from models import MitreTechnique
 from pydantic import BaseModel
-from pathlib import Path
-import sys
-import json
 import re
+
+# Catálogo de referencia ATT&CK (helper compartido con _persist_mitre)
+from layers.routers_functions import _MITRE_REF, _MITRE_REF_BY_ID
 
 
 router = APIRouter()
-
-
-# ─── Catálogo de referencia ATT&CK (dataset compacto local) ───────────────────
-# MITRE no ofrece API REST para buscar técnicas, así que llevamos un JSON compacto
-# (id, nombre, tácticas, descripción corta) generado del STIX oficial v19.2. Sirve
-# para el buscador "añadir técnica". La URL de cada técnica se deriva del ID.
-def _mitre_ref_path() -> Path:
-    # mitre_reference.json vive en la raíz del proyecto (o en _MEIPASS si es .exe)
-    base = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[2]
-    return base / "mitre_reference.json"
-
-
-def _load_mitre_ref() -> list:
-    try:
-        with open(_mitre_ref_path(), encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-
-_MITRE_REF = _load_mitre_ref()
-_MITRE_REF_BY_ID = {t["id"]: t for t in _MITRE_REF}
 
 
 @router.get("/api/mitre")
