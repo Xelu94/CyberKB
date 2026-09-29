@@ -151,77 +151,11 @@ def _note_dict(n: Note, full: bool = False) -> dict:
     return d
 
 
-def _persist_tools(tools_data: list, db: Session) -> list:
-    result = []
-    for td in tools_data:
-        name = td.get("name", "").strip()
-        if not name:
-            continue
-        t = db.query(Tool).filter(Tool.name.ilike(name)).first()
-        if t:
-            t.mention_count = (t.mention_count or 0) + 1
-            if not t.url and td.get("url"):
-                t.url = td["url"]
-            if not t.description and td.get("description"):
-                t.description = td["description"]
-        else:
-            url = td.get("url")
-            if not url:
-                name_lower = name.lower()
-                url = ai.KNOWN_TOOLS.get(name_lower)
-            t = Tool(
-                name=name,
-                url=url,
-                description=td.get("description"),
-                tool_type=td.get("tool_type", ai.detect_tool_type(name)),
-                mention_count=1,
-            )
-            db.add(t)
-        db.commit()
-        db.refresh(t)
-        result.append(t)
-    return result
-
-
 def _runtime_dir() -> Path:
     """Where user data lives (.env, data/, uploads/) — always next to exe/script."""
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
     return Path(__file__).parent
-
-
-def _persist_commands(cmds: list, note: Note, db: Session):
-    for cd in cmds:
-        cmd_str = cd.get("command", "").strip()
-        if not cmd_str:
-            continue
-        detected_os = cd.get("os") or ai.detect_command_os(cmd_str)
-        c = Command(
-            command=cmd_str,
-            description=cd.get("description"),
-            tool_name=cd.get("tool"),
-            os=detected_os,
-            flags=json.dumps(cd.get("flags", [])),
-            note_id=note.id,
-        )
-        db.add(c)
-    db.commit()
-
-
-def _persist_cves(cves: list, note: Note, db: Session):
-    for cd in cves:
-        cve_id = cd.get("id", "").strip()
-        if not cve_id:
-            continue
-        existing = db.query(CVE).filter(CVE.cve_id == cve_id).first()
-        if not existing:
-            c = CVE(
-                cve_id=cve_id,
-                description=cd.get("description"),
-                note_id=note.id,
-            )
-            db.add(c)
-    db.commit()
 
 
 # ─── Catálogo de referencia ATT&CK (dataset compacto local, STIX v19.2) ───────
