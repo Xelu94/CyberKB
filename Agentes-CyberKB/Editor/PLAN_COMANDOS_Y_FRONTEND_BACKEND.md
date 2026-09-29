@@ -274,8 +274,8 @@ activa solo desde la pestaña Editor completa, no desde el atajo rápido.
       vez de solo entidades con el `ai.extract_entities()` viejo. Verificado
       end-to-end (BBDD, `/api/graph`, vault) con varias rondas reales.
 
-> Modo Forense (`/api/forensic/analyze`) sigue sin unificar con Agrupador —
-> ver `MEJORAS_A_FUTURO.md`.
+> Modo Forense (`/api/forensic/analyze`) unificado con Agrupador el
+> 2026-09-29 — ver `MEJORAS_A_FUTURO.md`.
 
 ---
 

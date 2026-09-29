@@ -206,12 +206,30 @@ entrada, no toca el esquema fijo de 16 categorías/14 tácticas de Agrupador.)
 
 ---
 
-## Rama `capas` sigue sin fusionar (riesgo de reconciliación futura)
+## Rama `capas` — contenido de valor fusionado (2026-09-29); la reestructuración sigue sin adoptar
 
 Ver `project-seguimiento-github-cyberkb` en memoria para el detalle
-actualizado. La rama `capas` (refactor de `main.py` en `layers/routers/*.py`,
-autor nacho4xyz80) sigue sin fusionar a `main` y cada vez está más
-desincronizada — no tiene Obsi, ni el enganche de agentes, ni la migración de
-`/api/upload`/`/api/analyze` de hoy. Cuantos más commits se acumulen en `main`
-sin que `capas` los incorpore, más dolorosa será la fusión si algún día se
-decide hacerla.
+actualizado. `capas` (autor nacho4xyz80) resultó ser dos cosas mezcladas: (A)
+mejoras reales de funcionalidad — que en realidad venían todas de
+`feat/tools-mejoras` (autor 17Manu11) y `capas` solo las había absorbido vía
+merge — y (B) una reestructuración de `main.py` en `layers/routers/*.py`
+propia de `capas`, sin relación con (A).
+
+**Decisión (2026-09-29, pedida al usuario): fusionar solo (A), no (B).**
+Se hizo `git merge origin/feat/tools-mejoras` directamente a `main` (sin pasar
+por `capas`, que sólo habría añadido la reestructuración sin aportar nada
+nuevo). Merge automático, sin conflictos, no toca `Agentes-CyberKB/` ni el
+enganche de agentes de hoy. Contenido incorporado: SSTI (RCE real por motor),
+Enum (UI + guardar CVE desde exploit conocido + EDB más robusto), CVEs (borrar
+de la KB), MITRE (buscador de referencia ATT&CK v19), Herramientas
+(crear/borrar/sembrar), Forense (acepta MD5/SHA1, avisa si faltan API keys
+antes de gastar la IA, nota honesta "sin datos" en vez de alucinar). Probado
+en local (servidor arrancado, Forense/MITRE/Herramientas/SSTI verificados en
+navegador) antes de comprometer el merge. Pendiente de `push` — a confirmar.
+
+**Sigue abierto:** la reestructuración de `main.py` en `layers/routers/*.py`
+(B) de `capas` no se adoptó — se consideró más riesgo (chocaría con el
+enganche de agentes de hoy) que beneficio inmediato. Si se decide adoptarla
+más adelante, revisar el estado de `capas` de nuevo en ese momento (seguirá
+divergiendo de `main` mientras tanto, pero ya sin la mayoría del contenido de
+valor que la motivaba a corto plazo).
