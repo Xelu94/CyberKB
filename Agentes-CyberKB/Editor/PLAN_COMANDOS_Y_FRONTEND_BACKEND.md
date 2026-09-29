@@ -15,7 +15,7 @@ distintos**. Esto es clave para cuando nuestros agentes escriban en la tabla
 
 | Fuente | Cómo entra | ¿A la BBDD real? | Dedup |
 |---|---|---|---|
-| Análisis de texto/documento con IA | `_persist_commands()` en `main.py`, vía `/api/analyze` o `/api/upload` | Sí, `commands` | **Ninguna** — cada re-análisis duplica |
+| Análisis de texto/documento con IA | `Agente-BBDD/_comandos()`, vía `/api/analyze` (→Agrupador directo) o `/api/upload` (→Escritor→Agrupador→BBDD) — **actualizado 2026-09-28, `_persist_commands()` ya no existe** | Sí, `commands` | **Sí** — por `(command, note_id)`, `_fusionar()` actualiza en vez de duplicar |
 | Seeds al arrancar la app | `_seed_google_dorks()`, `PRIVESC_COMMANDS` en `main.py` | Sí, `commands`, `os='google'` o `category='privesc'`, `note_id=NULL` | Insert-or-ignore, solo al primer arranque |
 | Botón "💾 Guardar en KB" (Enum, SQLi, RevShell, Shell, PrivEsc) | `POST /api/commands` (`create_command`) | Sí, `commands` | Por `(command, category)`, `note_id=NULL` |
 | **Técnicas PrivEsc que el usuario crea a mano** | `loadPeTechniques()`/`savePeTechniques()` | **NO — solo `localStorage` del navegador** | N/A |
