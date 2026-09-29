@@ -695,71 +695,6 @@ def _cmd_dict(c: Command) -> dict:
 
 # ─── Graph Entities ────────────────────────────────────────────────────────────
 
-def _persist_entities(entities_data: list, relations_data: list, note: Note, db: Session):
-    """Upsert extracted entities into DB and link them to a note."""
-    from sqlalchemy import text as sqlt, select as sqsel
-
-    entity_map: dict[str, GraphEntity] = {}  # normalized_name -> obj
-
-    for ed in entities_data:
-        name = ed.get("name", "").strip()[:200]
-        if not name:
-            continue
-        etype = ed.get("type", "concept")
-        if etype not in ai.VALID_ENTITY_TYPES:
-            etype = "concept"
-
-        existing = db.query(GraphEntity).filter(
-            GraphEntity.name.ilike(name)
-        ).first()
-        if existing:
-            existing.frequency = (existing.frequency or 1) + 1
-            if not existing.description and ed.get("description"):
-                existing.description = ed["description"]
-            obj = existing
-        else:
-            obj = GraphEntity(
-                name=name,
-                entity_type=etype,
-                description=ed.get("description"),
-                frequency=1,
-            )
-            db.add(obj)
-
-        db.flush()
-
-        # Link to note (ignore duplicate)
-        try:
-            db.execute(sqlt(
-                "INSERT OR IGNORE INTO entity_note_map (entity_id, note_id) VALUES (:eid, :nid)"
-            ), {"eid": obj.id, "nid": note.id})
-        except Exception:
-            pass
-
-        entity_map[name.lower()] = obj
-
-    db.commit()
-
-    # Persist co-occurrence relations
-    for pair in relations_data:
-        if len(pair) != 2:
-            continue
-        obj_a = entity_map.get(pair[0].strip().lower())
-        obj_b = entity_map.get(pair[1].strip().lower())
-        if not obj_a or not obj_b or obj_a.id == obj_b.id:
-            continue
-        id_a, id_b = min(obj_a.id, obj_b.id), max(obj_a.id, obj_b.id)
-        try:
-            db.execute(sqlt("""
-                INSERT INTO entity_relations (entity_a_id, entity_b_id, weight)
-                VALUES (:a, :b, 1)
-                ON CONFLICT(entity_a_id, entity_b_id) DO UPDATE SET weight = weight + 1
-            """), {"a": id_a, "b": id_b})
-        except Exception:
-            pass
-    db.commit()
-
-
 @app.get("/api/graph")
 def get_graph(db: Session = Depends(get_db)):
     from sqlalchemy import select as sqsel
@@ -1756,10 +1691,15 @@ async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
     # Persist MITRE techniques
     _persist_mitre(note_data.get("mitre_techniques", []), n, db)
 
-    # Persist graph entities (best-effort)
+    # Reanalisis via Agrupador (tools/commands/cves/mitre/entidades), unificado
+    # con /api/notes/{id}/extract y /api/graph/reindex-all (2026-09-29).
+    # category/subcategory/tags se conservan (ver _reanalizar_con_agrupador):
+    # la clasificacion especializada de ai.generate_forensic_note() no se pisa.
+    # Probado con datos reales antes de aplicarlo: enriquece CVEs existentes sin
+    # duplicar, MITRE sin cambios; unico efecto secundario, ruido menor en
+    # tools (p.ej. "VirusTotal" puede colarse como herramienta) -- aceptado.
     try:
-        ent = ai.extract_entities(content_body[:6000])
-        _persist_entities(ent.get("entities", []), ent.get("relations", []), n, db)
+        _reanalizar_con_agrupador(n, db)
     except Exception:
         pass
 

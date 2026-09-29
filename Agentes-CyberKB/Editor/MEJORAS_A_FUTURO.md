@@ -40,7 +40,7 @@ referenciado hoy desde `Editor/` ni desde el código real.
 
 ---
 
-## Modo Forense sigue sin unificar con Agrupador
+## Modo Forense — UNIFICADO (2026-09-29)
 
 **2026-09-28.** `/api/forensic/analyze` es la única llamada que queda a
 `ai.extract_entities()` (el mecanismo viejo, con un modelo desactualizado y sin
@@ -77,9 +77,21 @@ gracias al arreglo del punto "Riesgo 5" (más abajo, ya aplicado):
   daño (VirusTotal no es una herramienta que el analista use activamente en el
   sentido que Agrupador normalmente captura).
 
-Si se decide unificar, este es el estado real del riesgo hoy: seguro para
-categoría/CVE/MITRE, con un pequeño problema de ruido en `tools` que habría
-que filtrar (o aceptar).
+**Decisión (2026-09-29): unificado.** Con el riesgo real ya medido y bajo, se
+aplicó — `/api/forensic/analyze` ahora llama a `_reanalizar_con_agrupador(n, db)`
+igual que `/api/notes/{id}/extract` y `/api/graph/reindex-all`, en vez de
+`ai.extract_entities()` (que queda sin ningún llamador y se eliminó de
+`main.py`, junto con `_persist_entities()`). La categorización especializada
+(`ai.generate_forensic_note()`) y la persistencia inicial de CVEs/MITRE desde
+VT/MalwareBazaar/Any.run **no se tocaron** — Agrupador solo enriquece/añade
+por encima, no sustituye ese primer paso. Ruido conocido y aceptado: puede
+colarse alguna fuente de datos (VirusTotal, MalwareBazaar) como fila en
+`tools`.
+
+No se pudo probar el endpoint real de punta a punta (sin `VIRUSTOTAL_API_KEY`/
+`MALWAREBAZAAR_API_KEY`/`ANYRUN_API_KEY` en `.env`), pero la función que ahora
+llama (`_reanalizar_con_agrupador`) es la misma, con la misma firma, que ya se
+verificó a fondo con datos reales en la prueba de arriba.
 
 ---
 
