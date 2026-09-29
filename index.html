@@ -5256,7 +5256,7 @@ function renderSqliGen(){
     // Bloqueadas hasta elegir tipo (Fase 2): Columnas (3) y Explotar (4). Columnas
     // solo aplica a UNION, así que con un tipo blind/error queda bloqueada como n/a.
     let locked=false, suffix='';
-    if(n===3){ locked = _sqliType!=='union'; if(_sqliType && _sqliType!=='union') suffix=' (n/a)'; else if(!_sqliType) suffix=' 🔒'; }
+    if(n===3){ locked = _sqliType!=='union'; if(!_sqliType) suffix=' 🔒'; }
     if(n===4){ locked = !_sqliType; if(!_sqliType) suffix=' 🔒'; }
     const act=n===_sqliPhase;
     const ttl = locked && !_sqliType ? ' title="Elige primero el tipo en la Fase 2"' : '';
