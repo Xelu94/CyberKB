@@ -813,11 +813,18 @@ def get_graph(db: Session = Depends(get_db)):
     }
 
 
-def _reanalizar_con_agrupador(n: Note) -> dict:
+def _reanalizar_con_agrupador(n: Note, db: Session) -> dict:
     """Re-envia una nota ya existente por Agrupador: mismo titulo/fichero de
     origen para que Agente-BBDD la reconozca como la misma fila (upsert, no
     duplicado) y actualice tools/commands/cves/mitre/entidades a la vez -- no
-    solo entidades, unificado con /api/analyze y /api/upload (2026-09-28)."""
+    solo entidades, unificado con /api/analyze y /api/upload (2026-09-28).
+
+    Restaura category/subcategory/tags despues: a diferencia de una ingesta
+    nueva, aqui la nota ya existia y pudo haberse curado a mano -- reanalizar
+    el grafo no debe pisar esa clasificacion con la que Agrupador adivine de
+    cero (confirmado con datos reales que si lo hacia, 2026-09-29)."""
+    categoria, subcategoria, tags = n.category, n.subcategory, n.tags
+
     resumen = ResumenEscritor(
         id=uuid.uuid4().hex,
         titulo=n.title,
@@ -825,7 +832,13 @@ def _reanalizar_con_agrupador(n: Note) -> dict:
         source="app-reextract",
         archivo_original=n.source_file,
     )
-    return _agrupador_procesar(resumen)
+    resultado = _agrupador_procesar(resumen)
+
+    db.refresh(n)
+    n.category, n.subcategory, n.tags = categoria, subcategoria, tags
+    db.commit()
+
+    return resultado
 
 
 @app.post("/api/notes/{note_id}/extract")
@@ -834,7 +847,7 @@ def extract_note_entities(note_id: int, db: Session = Depends(get_db)):
     n = db.query(Note).filter(Note.id == note_id).first()
     if not n:
         raise HTTPException(404, "Note not found")
-    resultado = _reanalizar_con_agrupador(n)
+    resultado = _reanalizar_con_agrupador(n, db)
     return {"agrupador": resultado, "extracted": len(resultado.get("entities", []))}
 
 
@@ -852,7 +865,7 @@ def reindex_all_entities(db: Session = Depends(get_db)):
     errors = 0
     for n in notes:
         try:
-            resultado = _reanalizar_con_agrupador(n)
+            resultado = _reanalizar_con_agrupador(n, db)
             total_entities += len(resultado.get("entities", []))
         except Exception as e:
             errors += 1
