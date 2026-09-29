@@ -337,6 +337,29 @@ def _persist_entities(entities_data: list, relations_data: list, note: Note, db:
     db.commit()
 
 
+def _reanalizar_con_agrupador(n: Note, db: Session) -> dict:
+    """Re-envia una nota ya existente por el Agrupador: mismo titulo/fichero de
+    origen para que Agente-BBDD la reconozca como la misma fila (upsert, no
+    duplicado) y actualice tools/commands/cves/mitre/entidades a la vez.
+
+    source="app-reextract" le dice a Agente-BBDD que NO toque
+    category/subcategory/tags de la nota: aqui la nota ya existia y pudo
+    curarse a mano, asi que su clasificacion no se pisa.
+
+    Import lazy de los agentes: sus carpetas las pone main.py en sys.path al
+    arrancar; importar aqui dentro evita depender del orden de carga."""
+    import uuid
+    from agrupador import _procesar as _agrupador_procesar, ResumenEscritor
+    resumen = ResumenEscritor(
+        id=uuid.uuid4().hex,
+        titulo=n.title,
+        resumen=n.content or n.summary or "",
+        source="app-reextract",
+        archivo_original=n.source_file,
+    )
+    return _agrupador_procesar(resumen)
+
+
 RUNTIME_DIR = _runtime_dir()
 
 load_dotenv(dotenv_path=RUNTIME_DIR / ".env", encoding="utf-8", override=True)

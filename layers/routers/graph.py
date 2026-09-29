@@ -2,10 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from models import GraphEntity, EntityRelation, entity_note_map, Note
-import claude_service as ai
 
 
-from layers.routers_functions import _persist_entities
+from layers.routers_functions import _reanalizar_con_agrupador
 
 
 router = APIRouter()
@@ -66,18 +65,18 @@ def get_graph(db: Session = Depends(get_db)):
 
 @router.post("/api/notes/{note_id}/extract")
 def extract_note_entities(note_id: int, db: Session = Depends(get_db)):
-    """Re-extract graph entities from an existing note."""
+    """Re-analiza una nota existente a traves del Agrupador (tools/commands/
+    cves/mitre/entidades), no solo el grafo."""
     n = db.query(Note).filter(Note.id == note_id).first()
     if not n:
         raise HTTPException(404, "Note not found")
-    result = ai.extract_entities(n.content[:6000])
-    _persist_entities(result.get("entities", []), result.get("relations", []), n, db)
-    return {"extracted": len(result.get("entities", []))}
+    resultado = _reanalizar_con_agrupador(n, db)
+    return {"agrupador": resultado, "extracted": len(resultado.get("entities", []))}
 
 
 @router.post("/api/graph/reindex-all")
 def reindex_all_entities(db: Session = Depends(get_db)):
-    """Clear all graph data and re-extract entities from every note using Claude AI."""
+    """Reanaliza todas las notas a traves del Agrupador y reconstruye el grafo."""
     from sqlalchemy import text
     # Wipe existing graph data
     db.execute(text("DELETE FROM entity_note_map"))
@@ -90,10 +89,8 @@ def reindex_all_entities(db: Session = Depends(get_db)):
     errors = 0
     for n in notes:
         try:
-            result = ai.extract_entities(n.content[:6000])
-            entities = result.get("entities", [])
-            _persist_entities(entities, result.get("relations", []), n, db)
-            total_entities += len(entities)
+            resultado = _reanalizar_con_agrupador(n, db)
+            total_entities += len(resultado.get("entities", []))
         except Exception as e:
             errors += 1
             print(f"[reindex] Note {n.id} failed: {e}")
