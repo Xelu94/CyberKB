@@ -7,6 +7,7 @@ import os
 import uuid
 import shutil
 import document_parser as parser
+import progreso  # progreso en vivo del pipeline de agentes (lo lee GET /api/progress)
 
 from layers.routers_functions import AnalyzeIn, _note_dict, _runtime_dir
 
@@ -25,6 +26,14 @@ UPLOAD_DIR = RUNTIME_DIR / os.getenv("UPLOAD_DIR", "uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 
+@router.get("/api/progress")
+def get_progress():
+    """Paso actual del pipeline de agentes, para que el frontend lo pinte en vivo.
+    Se sirve en paralelo a la peticion larga (los endpoints del pipeline son `def`
+    sincronos y corren en el threadpool, asi que el event loop queda libre)."""
+    return progreso.get()
+
+
 @router.post("/api/analyze")
 def analyze_text(data: AnalyzeIn, db: Session = Depends(get_db)):
     """Texto pegado directamente en el editor (sin fichero): va derecho a
@@ -37,7 +46,11 @@ def analyze_text(data: AnalyzeIn, db: Session = Depends(get_db)):
         resumen=data.text,
         source="app-analyze",
     )
-    resultado = _agrupador_procesar(resumen)
+    progreso.iniciar()
+    try:
+        resultado = _agrupador_procesar(resumen)
+    finally:
+        progreso.terminar()
 
     nota = None
     if resultado.get("bbdd_entregado"):
@@ -56,7 +69,7 @@ def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db))
     """Documento subido desde el editor: va a Escritor, que encadena a Agrupador
     -> Agente-BBDD -> Obsi. Sin auto_save: la cadena decide por si sola si guarda."""
     ext = Path(file.filename).suffix.lower()
-    if ext not in (".pdf", ".odt", ".txt", ".md", ".log"):
+    if ext not in (".pdf", ".odt", ".docx", ".html", ".htm", ".txt", ".md", ".log"):
         raise HTTPException(400, f"Unsupported file type: {ext}")
 
     dest = UPLOAD_DIR / f"{uuid.uuid4()}{ext}"
@@ -67,7 +80,11 @@ def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db))
     if not text.strip():
         raise HTTPException(422, "No text could be extracted from the file.")
 
-    resultado = _escritor_procesar(text, "app", file.filename)
+    progreso.iniciar()
+    try:
+        resultado = _escritor_procesar(text, "app", file.filename)
+    finally:
+        progreso.terminar()
 
     nota = None
     if resultado.get("agrupador_entregado"):

@@ -1,12 +1,16 @@
 from typing import Optional
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from database import get_db
 from models import Note, Command, CVE, MitreTechnique
 import json
+from pathlib import Path
 from datetime import datetime
 
 from layers.routers_functions import _note_dict, NoteIn
+# Generador de PDF del Escritor (sus carpetas las pone main.py en sys.path).
+from escritor import _a_pdf as _escritor_pdf
 
 
 router = APIRouter()
@@ -37,6 +41,23 @@ def get_note(note_id: int, db: Session = Depends(get_db)):
     if not n:
         raise HTTPException(404, "Note not found")
     return _note_dict(n, full=True)
+
+
+@router.get("/api/notes/{note_id}/pdf")
+def download_note_pdf(note_id: int, db: Session = Depends(get_db)):
+    """Genera al vuelo un PDF con el resumen de la nota (reutiliza el generador del
+    Escritor) y lo devuelve como descarga. La nota no guarda el PDF original, asi que
+    se regenera desde su contenido; vale para cualquier nota ya existente."""
+    n = db.query(Note).filter(Note.id == note_id).first()
+    if not n:
+        raise HTTPException(404, "Note not found")
+    texto = (n.summary or n.content or "").strip() or "(sin contenido)"
+    fecha = (n.updated_at or n.created_at or datetime.utcnow()).isoformat(timespec="seconds")
+    import tempfile
+    ruta = Path(tempfile.mkdtemp()) / f"nota_{n.id}.pdf"
+    _escritor_pdf(ruta, n.title, texto, n.source_file or "app", fecha)
+    nombre = "".join(ch if ch not in '\\/:*?"<>|' else " " for ch in n.title).strip()[:80] or f"nota_{n.id}"
+    return FileResponse(str(ruta), media_type="application/pdf", filename=f"{nombre}.pdf")
 
 
 @router.post("/api/notes", status_code=201)
