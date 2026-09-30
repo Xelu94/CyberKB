@@ -206,7 +206,7 @@ entrada, no toca el esquema fijo de 16 categorías/14 tácticas de Agrupador.)
 
 ---
 
-## Rama `capas` — contenido de valor fusionado (2026-09-29); la reestructuración sigue sin adoptar
+## Rama `capas` — RESUELTO del todo (2026-09-30): contenido y reestructuración, ambos fusionados a `main`
 
 Ver `project-seguimiento-github-cyberkb` en memoria para el detalle
 actualizado. `capas` (autor nacho4xyz80) resultó ser dos cosas mezcladas: (A)
@@ -215,24 +215,34 @@ mejoras reales de funcionalidad — que en realidad venían todas de
 merge — y (B) una reestructuración de `main.py` en `layers/routers/*.py`
 propia de `capas`, sin relación con (A).
 
-**Decisión (2026-09-29, pedida al usuario): fusionar solo (A), no (B).**
-Se hizo `git merge origin/feat/tools-mejoras` directamente a `main` (sin pasar
-por `capas`, que sólo habría añadido la reestructuración sin aportar nada
-nuevo). Merge automático, sin conflictos, no toca `Agentes-CyberKB/` ni el
-enganche de agentes de hoy. Contenido incorporado: SSTI (RCE real por motor),
-Enum (UI + guardar CVE desde exploit conocido + EDB más robusto), CVEs (borrar
-de la KB), MITRE (buscador de referencia ATT&CK v19), Herramientas
-(crear/borrar/sembrar), Forense (acepta MD5/SHA1, avisa si faltan API keys
-antes de gastar la IA, nota honesta "sin datos" en vez de alucinar). Probado
-en local (servidor arrancado, Forense/MITRE/Herramientas/SSTI verificados en
-navegador) antes de comprometer el merge. Pendiente de `push` — a confirmar.
+**2026-09-29**: se fusionó (A) a `main` (`git merge origin/feat/tools-mejoras`,
+commit `d137f46`), sin adoptar (B) — decisión pedida al usuario en su momento,
+por el riesgo de que la reestructuración chocara con el enganche de agentes de
+ese mismo día.
 
-**Sigue abierto:** la reestructuración de `main.py` en `layers/routers/*.py`
-(B) de `capas` no se adoptó — se consideró más riesgo (chocaría con el
-enganche de agentes de hoy) que beneficio inmediato. Si se decide adoptarla
-más adelante, revisar el estado de `capas` de nuevo en ese momento (seguirá
-divergiendo de `main` mientras tanto, pero ya sin la mayoría del contenido de
-valor que la motivaba a corto plazo).
+**2026-09-30 — (B) también se adoptó, por otra vía.** 17Manu11 construyó en
+paralelo una rama `integracion` que sí adopta `layers/routers/*.py` como
+arquitectura real de `main.py` (1762 líneas menos), portando sobre ella tanto
+el enganche de agentes como la unificación de Forense con Agrupador (paridad
+explícita con `main`, commit `ea847f9`) y el contenido de `feat/tools-mejoras`
+— y se fusionó a `main` (`3b6d176`, "Merge integracion a main: adoptar la
+arquitectura por capas"). Verificado tras el pull: `app.include_router(...)`
+sigue enganchando los 5 agentes, `_reanalizar_con_agrupador` (ahora en
+`layers/routers_functions.py`) sigue marcando `source="app-reextract"`, y el
+arreglo de raíz en `Agente-BBDD/agente_bbdd.py` (no pisar category/tags) sigue
+intacto — todo compila. De propina, `Cinefilo/Escritor/Agrupador/Agente-BBDD/
+Obsi` ahora propagan `obsi_entregado`/`obsi_ids`/`pdf_url` toda la cadena
+arriba, y hay un módulo `progreso.py` nuevo (opcional, con try/except) para
+progreso en vivo del pipeline — cubre buena parte de la sección "Frontend del
+Editor — Parte 3" de más abajo. 17Manu11 amplió este mismo fichero con una
+sección nueva de pendientes del frontend real (botones ocultos, cancelación,
+categoría/tags) — ver más abajo.
+
+**Cerrado.** No queda ninguna rama con contenido de valor sin fusionar. Único
+cabo suelto: no se ha revisado a fondo el código nuevo de `layers/routers/*.py`
+línea a línea (solo verificación de que compila y de que los puntos críticos
+de hoy — agentes, Forense, category/tags — sobreviven) — revisar con más calma
+si aparece algo raro en el uso normal de la app.
 
 
 ---
