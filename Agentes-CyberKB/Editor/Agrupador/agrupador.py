@@ -291,23 +291,33 @@ def _validar(bruto: dict) -> dict:
 # ---------------------------------------------------------------------- entrega
 
 
-def _entregar(url: str, timeout: float, payload: dict) -> bool:
+def _entregar(url: str, timeout: float, payload: dict) -> dict | None:
+    """Devuelve la respuesta de Agente-BBDD (lleva `obsi_entregado` y los ids ya
+    confirmados en SQLite), o None si no llego."""
     if not url:
-        return False
+        return None
     try:
         respuesta = httpx.post(url, json=payload, timeout=timeout)
         respuesta.raise_for_status()
-        return True
-    except httpx.HTTPError:
+        return respuesta.json()
+    except (httpx.HTTPError, ValueError):
         # La agrupacion ya esta escrita en disco: que el destino este caido no
         # invalida el trabajo hecho ni obliga a repetir la llamada al modelo.
-        return False
+        return None
 
 
 # ----------------------------------------------------------------- orquestacion
 
 
+try:
+    import progreso  # progreso en vivo del pipeline (opcional: solo dentro de la app)
+except Exception:
+    progreso = None
+
+
 def _procesar(resumen: ResumenEscritor) -> dict:
+    if progreso:
+        progreso.set_paso("agrupador")
     # Sin minimo de caracteres a proposito: la app tambien manda aqui texto corto
     # y concreto (un comando, una CVE, una ficha de herramienta) via /api/analyze,
     # que no tiene por que llegar a ningun umbral de longitud (2026-09-28).
@@ -337,10 +347,18 @@ def _procesar(resumen: ResumenEscritor) -> dict:
     except OSError:
         raise HTTPException(500, ERRORES["generico"])
 
-    return {
-        **payload,
-        "bbdd_entregado": _entregar(BBDD_URL, CFG["bbdd"]["timeout_segundos"], payload),
-    }
+    bbdd = _entregar(BBDD_URL, CFG["bbdd"]["timeout_segundos"], payload)
+    resultado = {**payload, "bbdd_entregado": bbdd is not None}
+    if bbdd is not None:
+        # Se propaga hacia arriba lo que BBDD sabe del ultimo eslabon (Obsi) y los
+        # ids ya guardados, para que el frontend distinga "completado" de
+        # "completado con aviso" y pueda reintentar solo la sincronizacion con Obsi.
+        resultado["obsi_entregado"] = bbdd.get("obsi_entregado", False)
+        resultado["obsi_ids"] = {
+            k: bbdd.get(k)
+            for k in ("nota_id", "herramientas_ids", "comandos_ids", "cves_ids", "mitre_ids")
+        }
+    return resultado
 
 
 @router.post("/agrupar")

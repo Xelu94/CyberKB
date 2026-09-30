@@ -8,7 +8,7 @@
 
   "limites": {
     "min_caracteres_entrada": 4000,
-    "extensiones": [".pdf", ".odt", ".txt", ".md", ".log"],
+    "extensiones": [".pdf", ".odt", ".docx", ".html", ".htm", ".txt", ".md", ".log"],
     "timeout_agrupador_segundos": 120
   },
 

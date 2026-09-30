@@ -206,12 +206,84 @@ entrada, no toca el esquema fijo de 16 categorías/14 tácticas de Agrupador.)
 
 ---
 
-## Rama `capas` sigue sin fusionar (riesgo de reconciliación futura)
+## Rama `capas` — contenido de valor fusionado (2026-09-29); la reestructuración sigue sin adoptar
 
 Ver `project-seguimiento-github-cyberkb` en memoria para el detalle
-actualizado. La rama `capas` (refactor de `main.py` en `layers/routers/*.py`,
-autor nacho4xyz80) sigue sin fusionar a `main` y cada vez está más
-desincronizada — no tiene Obsi, ni el enganche de agentes, ni la migración de
-`/api/upload`/`/api/analyze` de hoy. Cuantos más commits se acumulen en `main`
-sin que `capas` los incorpore, más dolorosa será la fusión si algún día se
-decide hacerla.
+actualizado. `capas` (autor nacho4xyz80) resultó ser dos cosas mezcladas: (A)
+mejoras reales de funcionalidad — que en realidad venían todas de
+`feat/tools-mejoras` (autor 17Manu11) y `capas` solo las había absorbido vía
+merge — y (B) una reestructuración de `main.py` en `layers/routers/*.py`
+propia de `capas`, sin relación con (A).
+
+**Decisión (2026-09-29, pedida al usuario): fusionar solo (A), no (B).**
+Se hizo `git merge origin/feat/tools-mejoras` directamente a `main` (sin pasar
+por `capas`, que sólo habría añadido la reestructuración sin aportar nada
+nuevo). Merge automático, sin conflictos, no toca `Agentes-CyberKB/` ni el
+enganche de agentes de hoy. Contenido incorporado: SSTI (RCE real por motor),
+Enum (UI + guardar CVE desde exploit conocido + EDB más robusto), CVEs (borrar
+de la KB), MITRE (buscador de referencia ATT&CK v19), Herramientas
+(crear/borrar/sembrar), Forense (acepta MD5/SHA1, avisa si faltan API keys
+antes de gastar la IA, nota honesta "sin datos" en vez de alucinar). Probado
+en local (servidor arrancado, Forense/MITRE/Herramientas/SSTI verificados en
+navegador) antes de comprometer el merge. Pendiente de `push` — a confirmar.
+
+**Sigue abierto:** la reestructuración de `main.py` en `layers/routers/*.py`
+(B) de `capas` no se adoptó — se consideró más riesgo (chocaría con el
+enganche de agentes de hoy) que beneficio inmediato. Si se decide adoptarla
+más adelante, revisar el estado de `capas` de nuevo en ese momento (seguirá
+divergiendo de `main` mientras tanto, pero ya sin la mayoría del contenido de
+valor que la motivaba a corto plazo).
+
+
+---
+
+## Frontend real del Editor — pendientes tras construirlo (2026-09-30)
+
+Lista de trabajo del frontend real ya construido (vídeo/documento/texto vía
+agentes, progreso en vivo, ver/descargar notas). Complementa la sección
+"Frontend del Editor — Parte 3" de más arriba, que ya está mayormente hecha.
+
+
+
+- **Botón "+ Nueva"** (`index.html`, toolbar del Editor): oculto por ahora
+  (`style="display:none"`, sigue llamando a `newNote()` si se reactiva). Hay
+  que mirar qué hace exactamente hoy (limpia título/contenido/categoría/tags,
+  oculta la tarjeta IA y el botón borrar, pone foco en el título) y decidir si
+  eso sigue teniendo sentido con el nuevo flujo (vídeo/documento vía agentes)
+  o si hay que cambiarlo.
+
+- **Botón "Guardar"** (`index.html`, toolbar del Editor): eliminado del HTML y
+  su backend `POST /api/notes` (`create_note` en `main.py`) borrado. Queda
+  pendiente la función `saveNote()` en el frontend: su rama de crear nota
+  llama a un POST que ya no existe (la rama `PUT /api/notes/{id}` sí sigue
+  viva). Hay que decidir si se borra `saveNote()`, si se deja solo para
+  editar notas existentes, o si guardar lo harán ya los agentes (BBDD/Obsi).
+
+- **Botón "Cancelar" para procesos en curso** (`index.html` + backend): falta
+  poder cancelar una transcripción de vídeo o una subida de documento mientras
+  está "En curso". Se llegó a montar y se revirtió a propósito, porque una
+  cancelación honesta necesita decidir el alcance:
+  - **Front (fácil, ya probado):** un `AbortController` por petición y un botón
+    "✕ Cancelar" en la tarjeta de "En curso". Aborta la ESPERA y devuelve la
+    interfaz al instante, pero **no detiene el backend**: la cadena es una sola
+    petición síncrona (`/api/cinefilo/transcribir`, `/api/upload`) y los agentes
+    siguen procesando esa vuelta por detrás (la nota puede acabar creándose).
+    Pasos: `API.post(path,data,opts)` con `signal`; `AbortController` en
+    `transcribeVideo()` y `uploadDocPipeline()`; tratar `AbortError` en el catch
+    (volver a "inicial" + aviso); botón en la rama `curso` de `_edPreview()`.
+  - **Backend (de verdad, pendiente de decidir):** para parar el proceso real
+    haría falta cancelación cooperativa en la cadena (Cinéfilo → Escritor →
+    Agrupador → BBDD → Obsi): un id de trabajo, un flag de cancelación que cada
+    agente consulte entre pasos, y limpiar lo ya escrito (JSON en disco, filas
+    parciales). Es rework de los agentes; decidir si merece la pena o si basta
+    con el cancelar de front + avisar de que el servidor puede seguir.
+  - Decidir el alcance antes de reimplementar. Referencia: se hizo y revirtió
+    en la sesión del 2026-09-29.
+
+- **Categoría (select `#noteCat`) y Tags (`#noteTags`)** (`index.html`,
+  toolbar del Editor): ocultos por ahora (`style="display:none"`), no
+  borrados, porque los siguen usando `newNote()`, `loadNote()`, `saveNote()`,
+  `analyzeNote()` y la subida de documentos. Hay que mirar si con el flujo de
+  agentes (el Agrupador ya decide categoría y tags) tienen sentido: quitarlos
+  del todo, dejarlos solo de lectura para mostrar lo que decidió el agente, o
+  mantenerlos para corregir a mano.

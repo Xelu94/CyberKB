@@ -171,22 +171,32 @@ def _a_pdf(destino: Path, titulo: str, resumen: str, origen: str, fecha: str) ->
     doc.build(piezas)
 
 
-def _enviar_a_agrupador(payload: dict) -> bool:
+def _enviar_a_agrupador(payload: dict) -> dict | None:
+    """Devuelve la respuesta del Agrupador (que ya trae propagado `obsi_entregado`
+    y los ids), o None si no llego."""
     if not AGRUPADOR_URL:
-        return False
+        return None
     try:
         respuesta = httpx.post(
             AGRUPADOR_URL, json=payload, timeout=LIMITES["timeout_agrupador_segundos"]
         )
         respuesta.raise_for_status()
-        return True
-    except httpx.HTTPError:
+        return respuesta.json()
+    except (httpx.HTTPError, ValueError):
         # El resumen ya existe y el PDF es descargable: que el Agrupador este caido
         # no invalida el trabajo hecho.
-        return False
+        return None
+
+
+try:
+    import progreso  # progreso en vivo del pipeline (opcional: solo dentro de la app)
+except Exception:
+    progreso = None
 
 
 def _procesar(texto: str, origen: Literal["app", "cinefilo"], nombre: str) -> dict:
+    if progreso:
+        progreso.set_paso("escritor")
     # El recuento va sobre el texto sin espacios: un PDF que solo tiene saltos de
     # linea suma miles de caracteres y llegaria a pagar una llamada al modelo.
     if _visibles(texto) < MIN_CARACTERES:
@@ -234,11 +244,17 @@ def _procesar(texto: str, origen: Literal["app", "cinefilo"], nombre: str) -> di
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 
-    return {
+    agr = _enviar_a_agrupador(payload)
+    resultado = {
         **payload,
         "pdf_url": f"/api/escritor/pdf/{resumen_id}",
-        "agrupador_entregado": _enviar_a_agrupador(payload),
+        "agrupador_entregado": agr is not None,
     }
+    if agr is not None:
+        # Propagado desde el Agrupador (que a su vez lo trae de Agente-BBDD).
+        resultado["obsi_entregado"] = agr.get("obsi_entregado", False)
+        resultado["obsi_ids"] = agr.get("obsi_ids")
+    return resultado
 
 
 @router.post("/resumen")

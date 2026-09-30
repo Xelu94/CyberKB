@@ -225,7 +225,15 @@ def _escribir(resultado: dict, tipo: str, entity_id: str, base: str, body: str) 
 # ----------------------------------------------------------------- orquestacion
 
 
+try:
+    import progreso  # progreso en vivo del pipeline (opcional: solo dentro de la app)
+except Exception:
+    progreso = None
+
+
 def _procesar(datos: IdsSync) -> dict:
+    if progreso:
+        progreso.set_paso("obsi")
     resultado: dict = {"notas_creadas": [], "notas_actualizadas": [], "notas_borradas": []}
     db = SessionLocal()
     try:
