@@ -1,50 +1,67 @@
 import os
-import re
 import sys
 import json
-import shutil
-import uuid
-from datetime import datetime
 from pathlib import Path
-from typing import Optional
-
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from dotenv import load_dotenv
+from database import get_db, init_db, engine
+from models import Note, Command, Tool, CVE
 
-# ─── Path resolution (works both as script and PyInstaller exe) ───────────────
+
+# ─── Cadena de agentes del Editor (Escritor -> Agrupador -> Agente-BBDD -> Obsi) ─
+# Sus carpetas se anaden a sys.path ANTES de importar los routers de capas, porque
+# layers/routers/analyze.py importa _procesar de escritor y agrupador. La URL entre
+# Escritor y Agrupador no tiene default en el codigo (las demas salen de cada
+# config.json), asi que la fijamos aqui apuntando al propio servidor.
+_AGENTES_DIR = Path(__file__).resolve().parent / "Agentes-CyberKB" / "Editor"
+for _carpeta in ("Cinefilo", "Escritor", "Agrupador", "Agente-BBDD", "Obsi"):
+    sys.path.insert(0, str(_AGENTES_DIR / _carpeta))
+os.environ.setdefault("AGRUPADOR_URL", "http://localhost:8000/api/agrupador/agrupar")
+
+from cinefilo import router as cinefilo_router
+from escritor import router as escritor_router
+from agrupador import router as agrupador_router
+from agente_bbdd import router as bbdd_router
+from obsi import router as obsi_router
+
+
+from layers.routers.osint import router as osint_router
+from layers.routers.notes import router as notes_router
+from layers.routers.analyze import router as analyze_router
+from layers.routers.chat import router as chat_router
+from layers.routers.settings import router as settings_router
+from layers.routers.tools import router as tools_router
+from layers.routers.commands import router as commands_router
+from layers.routers.cves import router as cves_router
+from layers.routers.mitre import router as mitre_router
+from layers.routers.graph import router as graph_router
+from layers.routers.audits import router as audits_router
+from layers.routers.forensic import router as forensic_router
+
+
+# # ─── Path resolution (works both as script and PyInstaller exe) ───────────────
 def _bundle_dir() -> Path:
     """Where bundled files live (index.html etc.)."""
     if getattr(sys, "frozen", False):
         return Path(sys._MEIPASS)   # PyInstaller temp extraction dir
     return Path(__file__).parent
 
-def _runtime_dir() -> Path:
-    """Where user data lives (.env, data/, uploads/) — always next to exe/script."""
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).parent
 
 BUNDLE_DIR  = _bundle_dir()
-RUNTIME_DIR = _runtime_dir()
 
-load_dotenv(dotenv_path=RUNTIME_DIR / ".env", encoding="utf-8", override=True)
 
-from database import get_db, init_db, engine
-from models import Note, Command, Tool, CVE, OsintResult, GraphEntity, EntityRelation, entity_note_map, MitreTechnique
-import claude_service as ai
-import document_parser as parser
-import osint_tools as osint
-import progreso
+###### No eliminar hasta comprobar que botón de Api Keys funciona correctamente #####
 
-UPLOAD_DIR = RUNTIME_DIR / os.getenv("UPLOAD_DIR", "uploads")
-UPLOAD_DIR.mkdir(exist_ok=True)
-(RUNTIME_DIR / "data").mkdir(exist_ok=True)
+# RUNTIME_DIR = _runtime_dir()
+
+# load_dotenv(dotenv_path=RUNTIME_DIR / ".env", encoding="utf-8", override=True)
+
+# UPLOAD_DIR = RUNTIME_DIR / os.getenv("UPLOAD_DIR", "uploads")
+# UPLOAD_DIR.mkdir(exist_ok=True)
+# (RUNTIME_DIR / "data").mkdir(exist_ok=True)
 
 
 def _migrate_db():
@@ -332,407 +349,10 @@ def _seed_privesc(_=None):
         db.close()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    init_db()
-    _migrate_db()
-    _seed_google_dorks(None)
-    _seed_privesc(None)
-    _seed_base_tools(None)
-    yield
-
-
-app = FastAPI(title="CyberKB v3", version="3.0.0", lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-# ─── Agentes (Agentes-CyberKB/Editor) ──────────────────────────────────────────
-# La carpeta anidada dentro de este mismo repo (no la copia hermana suelta que
-# documentaban los README de los agentes): asi funciona con solo clonar este
-# repo, sin depender de que exista una carpeta hermana en la maquina de quien
-# lo clone.
-_AGENTES_DIR = RUNTIME_DIR / "Agentes-CyberKB" / "Editor"
-for _carpeta in ("Cinefilo", "Escritor", "Agrupador", "Agente-BBDD", "Obsi"):
-    sys.path.insert(0, str(_AGENTES_DIR / _carpeta))
-
-from cinefilo import router as cinefilo_router
-from escritor import router as escritor_router, _procesar as _escritor_procesar, _a_pdf as _escritor_pdf
-from agrupador import router as agrupador_router, _procesar as _agrupador_procesar, ResumenEscritor
-from agente_bbdd import router as bbdd_router
-from obsi import router as obsi_router
-
-app.include_router(cinefilo_router)
-app.include_router(escritor_router)
-app.include_router(agrupador_router)
-app.include_router(bbdd_router)
-app.include_router(obsi_router)
-
-
-# ─── Serve Frontend ────────────────────────────────────────────────────────────
-
-@app.get("/", response_class=FileResponse)
-def root():
-    return FileResponse(str(BUNDLE_DIR / "index.html"))
-
-
-# ─── Stats ─────────────────────────────────────────────────────────────────────
-
-@app.get("/api/progress")
-def get_progress():
-    """Paso actual del pipeline de agentes, para que el frontend lo pinte en vivo.
-    Se sirve en paralelo a la petición larga (los endpoints del pipeline son `def`
-    síncronos y corren en el threadpool, así que el event loop queda libre)."""
-    return progreso.get()
-
-
-@app.get("/api/stats")
-def get_stats(db: Session = Depends(get_db)):
-    from sqlalchemy import func
-    cats = db.query(Note.category, func.count(Note.id)).group_by(Note.category).all()
-    return {
-        "total_notes": db.query(Note).count(),
-        "total_commands": db.query(Command).count(),
-        "total_tools": db.query(Tool).count(),
-        "total_cves": db.query(CVE).count(),
-        "categories": {c: n for c, n in cats},
-    }
-
-
-# ─── Notes ─────────────────────────────────────────────────────────────────────
-
-class NoteIn(BaseModel):
-    title: str
-    content: str
-    category: str = "teoria"
-    subcategory: Optional[str] = None
-    summary: Optional[str] = None
-    tags: Optional[list[str]] = None
-    source_file: Optional[str] = None
-
-
-@app.get("/api/notes")
-def list_notes(
-    search: Optional[str] = None,
-    category: Optional[str] = None,
-    skip: int = 0,
-    limit: int = 200,
-    db: Session = Depends(get_db),
-):
-    q = db.query(Note)
-    if category and category != "all":
-        q = q.filter(Note.category == category)
-    if search:
-        q = q.filter(
-            Note.title.ilike(f"%{search}%") | Note.content.ilike(f"%{search}%")
-        )
-    notes = q.order_by(Note.updated_at.desc()).offset(skip).limit(limit).all()
-    return [_note_dict(n) for n in notes]
-
-
-@app.get("/api/notes/{note_id}")
-def get_note(note_id: int, db: Session = Depends(get_db)):
-    n = db.query(Note).filter(Note.id == note_id).first()
-    if not n:
-        raise HTTPException(404, "Note not found")
-    return _note_dict(n, full=True)
-
-
-@app.get("/api/notes/{note_id}/pdf")
-def download_note_pdf(note_id: int, db: Session = Depends(get_db)):
-    """Genera al vuelo un PDF con el resumen de la nota (reutiliza el generador del
-    Escritor) y lo devuelve como descarga. La nota no guarda el PDF original, así que
-    se regenera desde su contenido; vale para cualquier nota ya existente."""
-    n = db.query(Note).filter(Note.id == note_id).first()
-    if not n:
-        raise HTTPException(404, "Note not found")
-    texto = (n.summary or n.content or "").strip() or "(sin contenido)"
-    fecha = (n.updated_at or n.created_at or datetime.utcnow()).isoformat(timespec="seconds")
-    import tempfile
-    ruta = Path(tempfile.mkdtemp()) / f"nota_{n.id}.pdf"
-    _escritor_pdf(ruta, n.title, texto, n.source_file or "app", fecha)
-    nombre = "".join(ch if ch not in '\\/:*?"<>|' else " " for ch in n.title).strip()[:80] or f"nota_{n.id}"
-    return FileResponse(str(ruta), media_type="application/pdf", filename=f"{nombre}.pdf")
-
-
-@app.put("/api/notes/{note_id}")
-def update_note(note_id: int, data: NoteIn, db: Session = Depends(get_db)):
-    n = db.query(Note).filter(Note.id == note_id).first()
-    if not n:
-        raise HTTPException(404, "Note not found")
-    n.title = data.title
-    n.content = data.content
-    n.category = data.category
-    n.subcategory = data.subcategory
-    n.summary = data.summary
-    n.tags = json.dumps(data.tags or [])
-    n.updated_at = datetime.utcnow()
-    db.commit()
-    db.refresh(n)
-    return _note_dict(n)
-
-
-@app.delete("/api/notes/all", status_code=204)
-def delete_all_notes(db: Session = Depends(get_db)):
-    """Wipe all notes, commands, CVEs, tool-note associations and graph data."""
-    from sqlalchemy import text
-    db.execute(text("DELETE FROM tool_notes"))
-    db.execute(text("DELETE FROM entity_note_map"))
-    db.execute(text("DELETE FROM entity_relations"))
-    db.execute(text("DELETE FROM graph_entities"))
-    db.query(MitreTechnique).delete()
-    db.query(CVE).delete()
-    db.query(Command).delete()
-    db.query(Note).delete()
-    db.commit()
-
-
-@app.delete("/api/notes/{note_id}", status_code=204)
-def delete_note(note_id: int, db: Session = Depends(get_db)):
-    n = db.query(Note).filter(Note.id == note_id).first()
-    if not n:
-        raise HTTPException(404, "Note not found")
-    db.delete(n)
-    db.commit()
-
-
-def _note_dict(n: Note, full: bool = False) -> dict:
-    d = {
-        "id": n.id,
-        "title": n.title,
-        "category": n.category,
-        "subcategory": n.subcategory,
-        "summary": n.summary,
-        "tags": json.loads(n.tags or "[]"),
-        "source_file": n.source_file,
-        "created_at": n.created_at.isoformat() if n.created_at else None,
-        "updated_at": n.updated_at.isoformat() if n.updated_at else None,
-    }
-    if full:
-        d["content"] = n.content
-        d["commands"] = [_cmd_dict(c) for c in n.commands]
-        d["cves"] = [_cve_dict(c) for c in n.cves]
-        d["tools"] = [_tool_dict(t) for t in n.tools]
-    return d
-
-
-# ─── Analyze & Upload ──────────────────────────────────────────────────────────
-
-class AnalyzeIn(BaseModel):
-    text: str
-    title: Optional[str] = None
-
-
-@app.post("/api/analyze")
-def analyze_text(data: AnalyzeIn, db: Session = Depends(get_db)):
-    """Texto pegado directamente en el editor (sin fichero): va derecho a Agrupador,
-    sin pasar por Escritor — pensado para contenido corto y ya concreto (un comando,
-    una CVE, una ficha de herramienta), no para documentos largos que necesiten
-    resumen previo. Ver PLAN_COMANDOS_Y_FRONTEND_BACKEND.md Parte 2.4."""
-    resumen = ResumenEscritor(
-        id=uuid.uuid4().hex,
-        titulo=(data.title or "").strip() or "Sin titulo",
-        resumen=data.text,
-        source="app-analyze",
-    )
-    progreso.iniciar()
-    try:
-        resultado = _agrupador_procesar(resumen)
-    finally:
-        progreso.terminar()
-
-    nota = None
-    if resultado.get("bbdd_entregado"):
-        nota = (
-            db.query(Note)
-            .filter(Note.title == resultado["titulo"])
-            .order_by(Note.id.desc())
-            .first()
-        )
-
-    return {"agrupador": resultado, "note": _note_dict(nota, full=True) if nota else None}
-
-
-@app.post("/api/upload")
-def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db)):
-    """Documento subido desde el editor: va a Escritor, que encadena a Agrupador ->
-    Agente-BBDD -> Obsi. Sin auto_save: la cadena decide por si sola si guarda (ya no
-    hay paso intermedio de previsualizar sin guardar). Ver PLAN_COMANDOS_Y_FRONTEND_BACKEND.md
-    Parte 2.4."""
-    ext = Path(file.filename).suffix.lower()
-    if ext not in (".pdf", ".odt", ".docx", ".html", ".htm", ".txt", ".md", ".log"):
-        raise HTTPException(400, f"Unsupported file type: {ext}")
-
-    dest = UPLOAD_DIR / f"{uuid.uuid4()}{ext}"
-    with open(dest, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-
-    text = parser.parse_file(str(dest), file.filename)
-    if not text.strip():
-        raise HTTPException(422, "No text could be extracted from the file.")
-
-    progreso.iniciar()
-    try:
-        resultado = _escritor_procesar(text, "app", file.filename)
-    finally:
-        progreso.terminar()
-
-    nota = None
-    if resultado.get("agrupador_entregado"):
-        nota = (
-            db.query(Note)
-            .filter(Note.title == resultado["titulo"], Note.source_file == file.filename)
-            .order_by(Note.id.desc())
-            .first()
-        )
-
-    return {
-        "filename": file.filename,
-        "text_length": len(text),
-        "escritor": resultado,
-        "note": _note_dict(nota, full=True) if nota else None,
-    }
-
-
-def _persist_mitre(techniques: list, note: Note, db: Session):
-    """Upsert de técnicas ATT&CK extraídas de una nota.
-
-    Si el ID está en el catálogo de referencia (mitre_reference.json), usamos su
-    táctica/nombre canónicos en lugar de los que devuelve la IA (que a veces se
-    equivoca de táctica); así nada cae en "Uncategorized" por un fallo del modelo.
-    """
-    for td in techniques:
-        tid = td.get("id", "").strip().upper()
-        if not tid:
-            continue
-        existing = db.query(MitreTechnique).filter(
-            MitreTechnique.technique_id == tid,
-            MitreTechnique.note_id == note.id
-        ).first()
-        if not existing:
-            ref = _MITRE_REF_BY_ID.get(tid)
-            mt = MitreTechnique(
-                note_id=note.id,
-                technique_id=tid,
-                technique_name=(ref["name"] if ref else td.get("name")),
-                tactic=((ref.get("tactics") or [None])[0] if ref else td.get("tactic")),
-                context_snippet=td.get("snippet"),
-            )
-            db.add(mt)
-    db.commit()
-
-
-# ─── Tools ─────────────────────────────────────────────────────────────────────
-
-@app.get("/api/tools")
-def list_tools(db: Session = Depends(get_db)):
-    tools = db.query(Tool).order_by(Tool.mention_count.desc()).all()
-    return [_tool_dict(t) for t in tools]
-
-
-@app.get("/api/tools/{tool_id}")
-def get_tool(tool_id: int, db: Session = Depends(get_db)):
-    t = db.query(Tool).filter(Tool.id == tool_id).first()
-    if not t:
-        raise HTTPException(404, "Tool not found")
-    d = _tool_dict(t)
-    # La relación Tool→Notes en el modelo se llama `tools` (no `notes`); usar el
-    # nombre correcto — antes daba 500 al abrir el detalle de cualquier herramienta.
-    d["notes"] = [{"id": n.id, "title": n.title, "category": n.category} for n in t.tools]
-    d["commands"] = [_cmd_dict(c) for c in db.query(Command).filter(Command.tool_name.ilike(t.name)).all()]
-    return d
-
-
-class ToolUpdate(BaseModel):
-    url: Optional[str] = None
-    description: Optional[str] = None
-    category: Optional[str] = None
-    tool_type: Optional[str] = None
-    use_cases: Optional[list[str]] = None
-    requires_api: Optional[bool] = None
-    api_info: Optional[str] = None
-
-
-@app.put("/api/tools/{tool_id}")
-def update_tool(tool_id: int, data: ToolUpdate, db: Session = Depends(get_db)):
-    t = db.query(Tool).filter(Tool.id == tool_id).first()
-    if not t:
-        raise HTTPException(404, "Tool not found")
-    if data.url is not None:
-        t.url = data.url
-    if data.description is not None:
-        t.description = data.description
-    if data.category is not None:
-        t.category = data.category
-    if data.tool_type is not None:
-        t.tool_type = data.tool_type
-    if data.use_cases is not None:
-        t.use_cases = json.dumps(data.use_cases)
-    if data.requires_api is not None:
-        t.requires_api = data.requires_api
-    if data.api_info is not None:
-        t.api_info = data.api_info
-    db.commit()
-    db.refresh(t)
-    return _tool_dict(t)
-
-
-# ─── [Módulo Herramientas] Crear / borrar / sembrar catálogo ──────────────────
-class ToolCreate(BaseModel):
-    name: str
-    url: Optional[str] = None
-    description: Optional[str] = None
-    category: Optional[str] = None
-    tool_type: Optional[str] = "software"
-    requires_api: Optional[bool] = False
-    api_info: Optional[str] = None
-
-
-@app.post("/api/tools", status_code=201)
-def create_tool(data: ToolCreate, db: Session = Depends(get_db)):
-    """Crea una herramienta a mano. Si ya existe una con ese nombre, sube su
-    contador de menciones en vez de duplicarla (upsert por nombre)."""
-    name = (data.name or "").strip()
-    if not name:
-        raise HTTPException(400, "El nombre es obligatorio")
-    existing = db.query(Tool).filter(Tool.name.ilike(name)).first()
-    if existing:
-        existing.mention_count = (existing.mention_count or 0) + 1
-        db.commit()
-        db.refresh(existing)
-        return {"created": False, **_tool_dict(existing)}
-    t = Tool(
-        name=name,
-        url=data.url or None,
-        description=data.description or None,
-        category=data.category or None,
-        tool_type=data.tool_type or "software",
-        requires_api=bool(data.requires_api),
-        api_info=data.api_info or None,
-        mention_count=1,
-    )
-    db.add(t)
-    db.commit()
-    db.refresh(t)
-    return {"created": True, **_tool_dict(t)}
-
-
-@app.delete("/api/tools/{tool_id}", status_code=204)
-def delete_tool(tool_id: int, db: Session = Depends(get_db)):
-    """Borra una herramienta (p. ej. un falso positivo del análisis por IA)."""
-    t = db.query(Tool).filter(Tool.id == tool_id).first()
-    if not t:
-        raise HTTPException(404, "Tool not found")
-    db.delete(t)
-    db.commit()
-    return
-
-
-# Catálogo base: herramientas de pentest que aparecen en los módulos de la app.
+# ─── Catálogo base de herramientas de pentest ────────────────────────────────
+# Las 18 herramientas base van siempre en el módulo, marcadas con la etiqueta
+# 'catalogo-base' para distinguirlas de las del usuario. El frontend pinta el
+# badge ★ Base cuando la tag incluye 'catalogo-base' (ver index.html).
 _TOOLS_SEED = [
     {"name": "nmap",        "category": "enumeracion",      "url": "https://nmap.org",                                   "description": "Escáner de red y puertos: descubre hosts, servicios y versiones."},
     {"name": "netdiscover", "category": "enumeracion",      "url": "https://github.com/netdiscover-scanner/netdiscover", "description": "Descubrimiento de hosts en la red local por ARP."},
@@ -758,13 +378,12 @@ _TOOLS_SEED = [
 def _seed_base_tools(_=None):
     """Siembra el catálogo base de pentest UNA sola vez (primer arranque).
 
-    Las herramientas base van siempre en el módulo, marcadas con la etiqueta
-    'catalogo-base' para distinguirlas de las del usuario. Se siembra una única
-    vez (marcador en disco) A PROPÓSITO: así, si el usuario borra una base, no
-    reaparece al reiniciar; si la quiere de vuelta, la re-añade a mano como
-    cualquier otra. No hay boton de "catalogo base": están o el usuario las quitó.
+    Se siembra una única vez (marcador en disco) A PROPÓSITO: así, si el usuario
+    borra una base, no reaparece al reiniciar; si la quiere de vuelta, la
+    re-añade a mano como cualquier otra. (En capas RUNTIME_DIR está desactivado,
+    así que el marcador vive junto al bundle — BUNDLE_DIR.)
     """
-    marker = RUNTIME_DIR / ".tools_base_seeded"
+    marker = BUNDLE_DIR / ".tools_base_seeded"
     if marker.exists():
         return
     from database import SessionLocal
@@ -781,1268 +400,117 @@ def _seed_base_tools(_=None):
                 tags=json.dumps(["catalogo-base"]),
             ))
         db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"[seed_base_tools] Error: {e}")
     finally:
         db.close()
-    marker.write_text("1", encoding="utf-8")
+    try:
+        marker.write_text("1", encoding="utf-8")
+    except Exception:
+        pass
 
 
-def _tool_dict(t: Tool) -> dict:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    _migrate_db()
+    _seed_google_dorks(None)
+    _seed_privesc(None)
+    _seed_base_tools(None)
+    yield
+
+
+app = FastAPI(title="CyberKB v3", version="3.0.0", lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ─── Serve Frontend ────────────────────────────────────────────────────────────
+
+@app.get("/", response_class=FileResponse)
+def root():
+    return FileResponse(str(BUNDLE_DIR / "index.html"))
+
+
+# ─── Stats ─────────────────────────────────────────────────────────────────────
+
+@app.get("/api/stats")
+def get_stats(db: Session = Depends(get_db)):
+    from sqlalchemy import func
+    cats = db.query(Note.category, func.count(Note.id)).group_by(Note.category).all()
     return {
-        "id": t.id,
-        "name": t.name,
-        "url": t.url,
-        "description": t.description,
-        "category": t.category,
-        "tool_type": t.tool_type or "software",
-        "use_cases": json.loads(t.use_cases or "[]"),
-        "tags": json.loads(t.tags or "[]"),
-        "requires_api": t.requires_api,
-        "api_info": t.api_info,
-        "mention_count": t.mention_count,
-        "created_at": t.created_at.isoformat() if t.created_at else None,
+        "total_notes": db.query(Note).count(),
+        "total_commands": db.query(Command).count(),
+        "total_tools": db.query(Tool).count(),
+        "total_cves": db.query(CVE).count(),
+        "categories": {c: n for c, n in cats},
     }
 
+
+# ─── Notes ─────────────────────────────────────────────────────────────────────
+
+app.include_router(notes_router)
+
+# ─── Analyze & Upload ──────────────────────────────────────────────────────────
+
+app.include_router(analyze_router)
+
+# ─── Tools ─────────────────────────────────────────────────────────────────────
+
+app.include_router(tools_router)
 
 # ─── Commands ──────────────────────────────────────────────────────────────────
+# ─── Commands OS filter ────────────────────────────────────────────────────────
 
-@app.post("/api/commands/cheatsheet")
-def gen_cheatsheet(tool_name: str, db: Session = Depends(get_db)):
-    cmds = db.query(Command).filter(Command.tool_name.ilike(f"%{tool_name}%")).all()
-    result = ai.generate_cheatsheet(tool_name, [_cmd_dict(c) for c in cmds])
-    return {"tool": tool_name, "cheatsheet": result}
-
-
-def _cmd_dict(c: Command) -> dict:
-    return {
-        "id": c.id,
-        "command": c.command,
-        "description": c.description,
-        "tool_name": c.tool_name,
-        "os": c.os or "linux",
-        "flags": json.loads(c.flags or "[]"),
-        "examples": json.loads(c.examples or "[]"),
-        "tags": json.loads(c.tags or "[]"),
-        "category": c.category,
-        "note_id": c.note_id,
-    }
-
+app.include_router(commands_router)
 
 # ─── Graph Entities ────────────────────────────────────────────────────────────
 
-@app.get("/api/graph")
-def get_graph(db: Session = Depends(get_db)):
-    from sqlalchemy import select as sqsel
-
-    entities = (
-        db.query(GraphEntity)
-        .order_by(GraphEntity.frequency.desc())
-        .limit(120)
-        .all()
-    )
-    if not entities:
-        return {"nodes": [], "edges": []}
-
-    entity_ids = [e.id for e in entities]
-
-    # Bulk-fetch entity→note mappings
-    enm_rows = db.execute(
-        sqsel(entity_note_map).where(entity_note_map.c.entity_id.in_(entity_ids))
-    ).fetchall()
-    note_map: dict[int, list[int]] = {}
-    for row in enm_rows:
-        note_map.setdefault(row.entity_id, []).append(row.note_id)
-
-    # Fetch note titles
-    all_note_ids = list({nid for nids in note_map.values() for nid in nids})
-    note_titles: dict[int, str] = {}
-    if all_note_ids:
-        for n in db.query(Note.id, Note.title).filter(Note.id.in_(all_note_ids)).all():
-            note_titles[n.id] = n.title
-
-    nodes = []
-    for e in entities:
-        note_ids = note_map.get(e.id, [])
-        nodes.append({
-            "id": e.id,
-            "name": e.name,
-            "type": e.entity_type,
-            "description": e.description,
-            "frequency": e.frequency,
-            "notes": [{"id": nid, "title": note_titles.get(nid, "?")} for nid in note_ids],
-        })
-
-    rels = db.query(EntityRelation).filter(
-        EntityRelation.entity_a_id.in_(entity_ids),
-        EntityRelation.entity_b_id.in_(entity_ids),
-    ).all()
-
-    return {
-        "nodes": nodes,
-        "edges": [{"a": r.entity_a_id, "b": r.entity_b_id, "weight": r.weight} for r in rels],
-    }
-
-
-def _reanalizar_con_agrupador(n: Note, db: Session) -> dict:
-    """Re-envia una nota ya existente por Agrupador: mismo titulo/fichero de
-    origen para que Agente-BBDD la reconozca como la misma fila (upsert, no
-    duplicado) y actualice tools/commands/cves/mitre/entidades a la vez -- no
-    solo entidades, unificado con /api/analyze y /api/upload (2026-09-28).
-
-    source="app-reextract" le dice a Agente-BBDD que NO toque
-    category/subcategory/tags de la nota (ver agente_bbdd._nota()) -- a
-    diferencia de una ingesta nueva, aqui la nota ya existia y pudo haberse
-    curado a mano. Antes esto se "arreglaba" aqui mismo, restaurando los
-    valores despues de la llamada; era una carrera de tiempos (si Agente-BBDD
-    tardaba mas que el timeout del llamador y terminaba tarde en segundo
-    plano, su commit tardio pisaba la restauracion igualmente, visto con
-    datos reales el mismo dia). Arreglado en el origen, en Agente-BBDD."""
-    resumen = ResumenEscritor(
-        id=uuid.uuid4().hex,
-        titulo=n.title,
-        resumen=n.content or n.summary or "",
-        source="app-reextract",
-        archivo_original=n.source_file,
-    )
-    return _agrupador_procesar(resumen)
-
-
-@app.post("/api/notes/{note_id}/extract")
-def extract_note_entities(note_id: int, db: Session = Depends(get_db)):
-    """Re-analiza una nota existente a traves de Agrupador."""
-    n = db.query(Note).filter(Note.id == note_id).first()
-    if not n:
-        raise HTTPException(404, "Note not found")
-    resultado = _reanalizar_con_agrupador(n, db)
-    return {"agrupador": resultado, "extracted": len(resultado.get("entities", []))}
-
-
-@app.post("/api/graph/reindex-all")
-def reindex_all_entities(db: Session = Depends(get_db)):
-    """Reanaliza todas las notas a traves de Agrupador y reconstruye el grafo."""
-    from sqlalchemy import text
-    db.execute(text("DELETE FROM entity_note_map"))
-    db.execute(text("DELETE FROM entity_relations"))
-    db.execute(text("DELETE FROM graph_entities"))
-    db.commit()
-
-    notes = db.query(Note).all()
-    total_entities = 0
-    errors = 0
-    for n in notes:
-        try:
-            resultado = _reanalizar_con_agrupador(n, db)
-            total_entities += len(resultado.get("entities", []))
-        except Exception as e:
-            errors += 1
-            print(f"[reindex] Note {n.id} failed: {e}")
-
-    return {"notes_processed": len(notes), "entities_extracted": total_entities, "errors": errors}
-
+app.include_router(graph_router)
 
 # ─── CVEs ──────────────────────────────────────────────────────────────────────
 
-@app.get("/api/cves")
-def list_cves(db: Session = Depends(get_db)):
-    cves = db.query(CVE).order_by(CVE.created_at.desc()).all()
-    return [_cve_dict(c) for c in cves]
-
-
-# ─── Exploit-DB (compartido por módulos CVEs y Enumeración) ───────────────────
-_EDB_HEADERS = {
-    "User-Agent": "CyberKB/3.0",
-    "X-Requested-With": "XMLHttpRequest",
-    "Accept": "application/json, text/javascript, */*; q=0.01",
-    "Referer": "https://www.exploit-db.com/search",
-}
-
-
-async def _edb_search(extra_params: dict, limit: int = 15):
-    """Consulta la búsqueda JSON (formato DataTables) de Exploit-DB y devuelve
-    (exploits, error). Lo usan tanto el buscador por CVE (módulo CVEs) como el
-    buscador por versión (módulo Enumeración); solo cambian los `extra_params`
-    ('cve' o 'q'). El mapeo de la fila cruda de EDB es común a los dos.
-    """
-    import httpx
-    import asyncio
-    params = {
-        "action": "search", "draw": "1",
-        "columns[0][data]": "id", "columns[1][data]": "date_published",
-        "columns[2][data]": "title", "columns[3][data]": "type",
-        "columns[4][data]": "platform", "columns[5][data]": "verified",
-        "order[0][column]": "1", "order[0][dir]": "desc",
-        "start": "0", "length": str(limit),
-        **extra_params,
-    }
-    # Exploit-DB va detrás de Cloudflare y responde lento/intermitente (502, 503,
-    # 429, timeouts). Reintentamos varias veces con backoff creciente para absorber
-    # esos fallos transitorios; los estados NO transitorios (p. ej. 403 = bloqueo)
-    # cortan el bucle porque insistir no ayuda y solo alarga la espera.
-    TRANSIENT = {429, 500, 502, 503, 504}
-    delays = [1.0, 2.0]                 # esperas entre intentos → len(delays)+1 intentos
-    last_err = None
-    for attempt in range(len(delays) + 1):
-        try:
-            async with httpx.AsyncClient(timeout=20, headers=_EDB_HEADERS) as client:
-                r = await client.get("https://www.exploit-db.com/search", params=params)
-            if r.status_code == 200:
-                return _edb_map(r.json().get("data", []), limit), None
-            last_err = f"Exploit-DB devolvió HTTP {r.status_code}"
-            if r.status_code not in TRANSIENT:
-                break
-        except Exception as e:
-            last_err = str(e)
-        if attempt < len(delays):
-            await asyncio.sleep(delays[attempt])
-    return [], last_err
-
-
-def _edb_map(rows: list, limit: int) -> list:
-    """Normaliza las filas crudas de Exploit-DB al objeto que devolvemos.
-
-    El JSON de EDB usa nombres de campo poco intuitivos (viene de un DataTables):
-      - el título está en description[1]  (description = ["id", "título"])
-      - la plataforma en platform_id      (o platform.platform si es dict)
-      - el tipo en type_id                (o type.name)
-      - el CVE, dentro de la lista code[]  (y a veces trae códigos que NO son CVE)
-    Por eso el mapeo tiene tantos .get() con alternativas.
-    """
-    exploits = []
-    for row in rows[:limit]:
-        eid = row.get("id", "")
-        desc = row.get("description")
-        title = desc[1] if isinstance(desc, list) and len(desc) > 1 else (row.get("title") or "")
-        platform = row.get("platform_id") or (
-            row.get("platform", {}).get("platform", "") if isinstance(row.get("platform"), dict) else "")
-        typ = row.get("type_id") or (
-            row.get("type", {}).get("name", "") if isinstance(row.get("type"), dict) else "")
-        cve = ""
-        code = row.get("code")
-        if isinstance(code, list) and code and isinstance(code[0], dict):
-            c0 = code[0].get("code", "")
-            # Solo lo tratamos como CVE si tiene forma AAAA-NNNN (el campo también
-            # trae otros identificadores, p. ej. de Metasploit)
-            if re.match(r"^\d{4}-\d{3,}$", c0):
-                cve = "CVE-" + c0
-        exploits.append({
-            "id": eid, "title": title, "date": (row.get("date_published") or "")[:10],
-            "type": typ, "platform": platform, "cve": cve,
-            "url": f"https://www.exploit-db.com/exploits/{eid}" if eid else "",
-            "verified": bool(row.get("verified")),
-        })
-    return exploits
-
-
-@app.get("/api/cves/{cve_id}/exploits")
-async def cve_exploits(cve_id: str):
-    """Exploits públicos en Exploit-DB para un CVE concreto (búsqueda por ID)."""
-    cve_num = re.sub(r"^CVE-", "", cve_id.strip(), flags=re.IGNORECASE)
-    exploits, error = await _edb_search({"cve": cve_num}, limit=10)
-    res = {"cve_id": cve_id, "count": len(exploits), "exploits": exploits}
-    if error:
-        res["error"] = error
-    return res
-
-
-@app.get("/api/exploit-search")
-async def exploit_search(q: str):
-    """[Módulo de Enumeración] Busca exploits públicos por producto + versión.
-
-    Da servicio al buscador «Versión → ¿exploit conocido?» de la pestaña ③
-    Enumerar servicios: resuelve el paso "tengo una versión detectada en el
-    escaneo, ¿existe exploit público?". Consulta en vivo la búsqueda de
-    Exploit-DB (exploit-db.com, sin API key) y devuelve, por cada resultado,
-    título, tipo, plataforma, fecha, CVE (si lo tiene) y enlace. Es el gemelo
-    por texto de GET /api/cves/{cve_id}/exploits, que busca lo mismo por CVE.
-    """
-    query = (q or "").strip()
-    if not query:
-        return {"query": q, "count": 0, "exploits": []}
-    exploits, error = await _edb_search({"q": query}, limit=15)
-    res = {"query": query, "count": len(exploits), "exploits": exploits}
-    if error:
-        res["error"] = error
-    return res
-
-
-# ─── NVD (National Vulnerability Database, NIST) — ficha oficial de un CVE ─────
-async def _nvd_lookup(cve_id: str) -> dict:
-    """Consulta la API pública de NVD (NIST) por un CVE y devuelve su ficha
-    oficial: descripción, CVSS/severidad, CWE, fechas y referencias.
-
-    NVD es la fuente autoritativa "qué es este CVE y cómo de grave es". No hace
-    falta API key (hay límite de tasa, de sobra para uso interactivo).
-
-    Siempre devuelve un dict con la clave 'found' (True/False) para que quien lo
-    llame no tenga que capturar excepciones: si algo falla, found=False + 'error'.
-    """
-    import httpx
-    try:
-        # La API v2.0 filtra por un CVE concreto con el parámetro cveId
-        async with httpx.AsyncClient(timeout=15, headers={"User-Agent": "CyberKB/3.0"}) as client:
-            r = await client.get(
-                "https://services.nvd.nist.gov/rest/json/cves/2.0",
-                params={"cveId": cve_id},
-            )
-        if r.status_code != 200:
-            return {"found": False, "cve_id": cve_id, "error": f"NVD HTTP {r.status_code}"}
-        # La respuesta trae una lista 'vulnerabilities'; cada elemento tiene un 'cve'
-        vulns = r.json().get("vulnerabilities", [])
-        if not vulns:
-            return {"found": False, "cve_id": cve_id}
-        cve = vulns[0].get("cve", {})
-
-        # Descripción: NVD la da en varios idiomas; cogemos la inglesa
-        desc = next((d.get("value", "") for d in cve.get("descriptions", []) if d.get("lang") == "en"), "")
-
-        # CVSS: un CVE puede traer métricas en varias versiones del estándar.
-        # Preferimos la más nueva disponible (3.1 > 3.0 > 2.0) y paramos en la 1ª.
-        cvss = severity = vector = None
-        metrics = cve.get("metrics", {})
-        for key in ("cvssMetricV31", "cvssMetricV30", "cvssMetricV2"):
-            if metrics.get(key):
-                m = metrics[key][0]
-                cdata = m.get("cvssData", {})
-                cvss = cdata.get("baseScore")          # p. ej. 10.0
-                severity = cdata.get("baseSeverity") or m.get("baseSeverity")  # p. ej. CRITICAL
-                vector = cdata.get("vectorString")     # cadena CVSS (AV:N/AC:L/...)
-                break
-
-        # CWE = tipo de fallo (p. ej. CWE-89 = SQLi). Está anidado en 'weaknesses'.
-        cwes = []
-        for w in cve.get("weaknesses", []):
-            for d in w.get("description", []):
-                v = d.get("value", "")
-                if v.startswith("CWE-") and v not in cwes:
-                    cwes.append(v)
-
-        # Referencias (advisories, parches...): nos quedamos con las 6 primeras
-        refs = [ref.get("url", "") for ref in cve.get("references", []) if ref.get("url")][:6]
-
-        return {
-            "found": True,
-            "cve_id": cve.get("id", cve_id),
-            "description": desc,
-            "cvss": cvss,
-            "severity": (severity or "").capitalize() or None,  # CRITICAL -> Critical
-            "vector": vector,
-            "cwe": cwes,
-            "published": (cve.get("published") or "")[:10],       # solo la fecha (YYYY-MM-DD)
-            "modified": (cve.get("lastModified") or "")[:10],
-            "references": refs,
-        }
-    except Exception as e:
-        return {"found": False, "cve_id": cve_id, "error": str(e)}
-
-
-@app.get("/api/cve-lookup")
-async def cve_lookup(id: str):
-    """[Módulo CVEs] Busca cualquier CVE por su ID en NVD (ficha oficial).
-
-    Lo llama el frontend cuando escribes un ID (CVE-AAAA-NNNN) que no tienes en
-    la KB y pulsas "Buscar en NVD". Validamos el formato aquí para no gastar una
-    petición a NVD con basura.
-    """
-    cid = (id or "").strip().upper()
-    if not re.match(r"^CVE-\d{4}-\d{4,}$", cid):
-        raise HTTPException(400, "Formato de CVE inválido (esperado CVE-AAAA-NNNN)")
-    return await _nvd_lookup(cid)
-
-
-# Cuerpo (JSON) que acepta POST /api/cves. Solo cve_id es obligatorio; el resto
-# se rellena con lo que traiga la ficha de NVD al guardar.
-class CVECreate(BaseModel):
-    cve_id: str
-    description: Optional[str] = None
-    severity: Optional[str] = None
-    cvss: Optional[float] = None
-    title: Optional[str] = None
-
-
-@app.post("/api/cves")
-def create_cve(data: CVECreate, db: Session = Depends(get_db)):
-    """[Módulo CVEs] Guarda un CVE en la KB (botón "Guardar" tras buscar en NVD).
-
-    Va a la misma tabla `cves` que los CVEs que la IA detecta en documentos.
-    Es un upsert: si el CVE ya existe, actualiza sus campos en vez de duplicarlo;
-    devuelve created=True/False para que el frontend sepa qué pasó.
-    """
-    cid = data.cve_id.strip().upper()
-    if not re.match(r"^CVE-\d{4}-\d{4,}$", cid):
-        raise HTTPException(400, "Formato de CVE inválido")
-    row = db.query(CVE).filter(CVE.cve_id == cid).first()
-    if row:
-        # Ya existe → solo sobreescribimos los campos que llegan con valor
-        if data.description:
-            row.description = data.description
-        if data.severity:
-            row.severity = data.severity
-        if data.cvss is not None:
-            row.cvss = data.cvss
-        if data.title:
-            row.title = data.title
-        db.commit()
-        db.refresh(row)
-        return {"created": False, **_cve_dict(row)}
-    # No existe → fila nueva
-    row = CVE(cve_id=cid, description=data.description, severity=data.severity,
-              cvss=data.cvss, title=data.title)
-    db.add(row)
-    db.commit()
-    db.refresh(row)
-    return {"created": True, **_cve_dict(row)}
-
-
-@app.delete("/api/cves/{cid}", status_code=204)
-def delete_cve(cid: int, db: Session = Depends(get_db)):
-    """[Módulo CVEs] Borra un CVE de la KB (botón 🗑 de la tarjeta).
-
-    Da simetría con Herramientas, que ya tenía borrado. Antes un CVE guardado a
-    mano (sin nota asociada) no se podía quitar por ninguna vía. Se borra por id
-    numérico (PK), igual que DELETE /api/tools/{id}.
-    """
-    row = db.query(CVE).filter(CVE.id == cid).first()
-    if not row:
-        raise HTTPException(404, "CVE no encontrado en la base de datos")
-    db.delete(row)
-    db.commit()
-    return
-
-
-@app.post("/api/cves/{cve_id}/enrich")
-async def enrich_cve(cve_id: str, db: Session = Depends(get_db)):
-    """[Módulo CVEs] Rellena CVSS/severidad/descripción oficiales de un CVE que
-    YA está en la KB, consultando NVD (botón "↻ Enriquecer").
-
-    Útil porque los CVEs detectados por la IA a veces traen esos campos vacíos o
-    imprecisos; aquí los sustituimos por los datos autoritativos de NVD.
-    """
-    row = db.query(CVE).filter(CVE.cve_id == cve_id).first()
-    if not row:
-        raise HTTPException(404, "CVE no encontrado en la base de datos")
-    nvd = await _nvd_lookup(cve_id)
-    if not nvd.get("found"):
-        return {"updated": False, "error": nvd.get("error") or "no encontrado en NVD"}
-    if nvd.get("cvss") is not None:
-        row.cvss = nvd["cvss"]
-    if nvd.get("severity"):
-        row.severity = nvd["severity"]
-    if nvd.get("description"):
-        row.description = nvd["description"]
-    db.commit()
-    db.refresh(row)
-    return {"updated": True, **_cve_dict(row)}
-
-
-def _cve_dict(c: CVE) -> dict:
-    return {
-        "id": c.id,
-        "cve_id": c.cve_id,
-        "title": c.title,
-        "description": c.description,
-        "severity": c.severity,
-        "cvss": c.cvss,
-        "note_id": c.note_id,
-    }
-
+app.include_router(cves_router)
 
 # ─── Chat ──────────────────────────────────────────────────────────────────────
-
-class ChatIn(BaseModel):
-    question: str
-
-
-@app.post("/api/chat")
-def chat(data: ChatIn, db: Session = Depends(get_db)):
-    from sqlalchemy import func
-    notes = db.query(Note).order_by(Note.updated_at.desc()).limit(20).all()
-    answer = ai.chat_with_context(data.question, [_note_dict(n) for n in notes])
-    return {"answer": answer}
-
-
 # ─── Search ────────────────────────────────────────────────────────────────────
-
-@app.get("/api/search")
-def global_search(q: str, db: Session = Depends(get_db)):
-    notes = db.query(Note).filter(
-        Note.title.ilike(f"%{q}%") | Note.content.ilike(f"%{q}%")
-    ).limit(20).all()
-    cmds = db.query(Command).filter(
-        Command.command.ilike(f"%{q}%") | Command.description.ilike(f"%{q}%")
-    ).limit(10).all()
-    tools = db.query(Tool).filter(Tool.name.ilike(f"%{q}%")).limit(10).all()
-    return {
-        "notes": [_note_dict(n) for n in notes],
-        "commands": [_cmd_dict(c) for c in cmds],
-        "tools": [_tool_dict(t) for t in tools],
-    }
-
-
 # ─── Export / Import ──────────────────────────────────────────────────────────
 
-@app.get("/api/export")
-def export_all(db: Session = Depends(get_db)):
-    notes = db.query(Note).all()
-    tools = db.query(Tool).all()
-    commands = db.query(Command).all()
-    cves = db.query(CVE).all()
-    return {
-        "export_date": datetime.utcnow().isoformat(),
-        "version": "3.0",
-        "notes": [_note_dict(n, full=True) for n in notes],
-        "tools": [_tool_dict(t) for t in tools],
-        "commands": [_cmd_dict(c) for c in commands],
-        "cves": [_cve_dict(c) for c in cves],
-    }
-
+app.include_router(chat_router)
 
 # ─── OSINT ─────────────────────────────────────────────────────────────────────
 
-@app.post("/api/osint/whois")
-async def api_whois(domain: str, db: Session = Depends(get_db)):
-    result = await osint.whois_lookup(domain)
-    _save_osint(domain, "whois", result, db)
-    return result
-
-
-@app.post("/api/osint/dns")
-async def api_dns(domain: str, db: Session = Depends(get_db)):
-    result = await osint.dns_lookup(domain)
-    _save_osint(domain, "dns", result, db)
-    return result
-
-
-@app.post("/api/osint/ip")
-async def api_ip(ip: str, db: Session = Depends(get_db)):
-    result = await osint.ip_geolocate(ip)
-    _save_osint(ip, "ip", result, db)
-    return result
-
-
-@app.post("/api/osint/subdomains")
-async def api_subdomains(domain: str, db: Session = Depends(get_db)):
-    result = await osint.subdomains_combined(domain)
-    _save_osint(domain, "subdomains", result, db)
-    return result
-
-
-@app.post("/api/osint/ssl")
-async def api_ssl(domain: str, db: Session = Depends(get_db)):
-    result = await osint.ssl_cert(domain)
-    _save_osint(domain, "ssl", result, db)
-    return result
-
-
-@app.post("/api/osint/wayback")
-async def api_wayback(url: str, db: Session = Depends(get_db)):
-    result = await osint.wayback(url)
-    _save_osint(url, "wayback", result, db)
-    return result
-
-
-@app.post("/api/osint/dmarc")
-async def api_dmarc(domain: str, db: Session = Depends(get_db)):
-    result = await osint.dmarc_spf(domain)
-    _save_osint(domain, "dmarc", result, db)
-    return result
-
-
-@app.post("/api/osint/robots")
-async def api_robots(domain: str, db: Session = Depends(get_db)):
-    result = await osint.robots_txt(domain)
-    _save_osint(domain, "robots", result, db)
-    return result
-
-
-@app.post("/api/osint/reverse-dns")
-async def api_rdns(ip: str, db: Session = Depends(get_db)):
-    result = await osint.reverse_dns(ip)
-    _save_osint(ip, "reverse-dns", result, db)
-    return result
-
-
-@app.post("/api/osint/hibp")
-async def api_hibp(target: str, db: Session = Depends(get_db)):
-    result = await osint.hibp_check(target)
-    _save_osint(target, "hibp", result, db)
-    return result
-
-
-@app.post("/api/osint/email-verify")
-async def api_email_verify(email: str, db: Session = Depends(get_db)):
-    import asyncio
-    verify_task = osint.email_verify(email)
-    hibp_task   = osint.hibp_check(email)
-    result, hibp_result = await asyncio.gather(verify_task, hibp_task)
-    result["hibp"] = hibp_result
-    _save_osint(email, "email-verify", result, db)
-    return result
-
-
-@app.post("/api/osint/hunter")
-async def api_hunter(domain: str, db: Session = Depends(get_db)):
-    result = await osint.hunter_io(domain)
-    _save_osint(domain, "hunter", result, db)
-    return result
-
-
-@app.post("/api/osint/shodan")
-async def api_shodan(query: str, db: Session = Depends(get_db)):
-    result = await osint.shodan_lookup(query)
-    _save_osint(query, "shodan", result, db)
-    return result
-
-
-@app.post("/api/osint/urlscan")
-async def api_urlscan(query: str, db: Session = Depends(get_db)):
-    result = await osint.urlscan_search(query)
-    _save_osint(query, "urlscan", result, db)
-    return result
-
-
-@app.post("/api/osint/virustotal")
-async def api_vt(target: str, db: Session = Depends(get_db)):
-    result = await osint.virustotal_lookup(target)
-    _save_osint(target, "virustotal", result, db)
-    return result
-
-
-@app.post("/api/osint/headers")
-async def api_headers(url: str, db: Session = Depends(get_db)):
-    result = await osint.http_headers(url)
-    _save_osint(url, "headers", result, db)
-    return result
-
-
-# ─── Threat Intelligence ───────────────────────────────────────────────────────
-
-@app.post("/api/osint/hash-vt")
-async def api_hash_vt(hash: str, db: Session = Depends(get_db)):
-    result = await osint.hash_vt(hash)
-    _save_osint(hash, "hash-vt", result, db)
-    return result
-
-
-@app.post("/api/osint/abuseipdb")
-async def api_abuseipdb(ip: str, db: Session = Depends(get_db)):
-    result = await osint.ip_abuseipdb(ip)
-    _save_osint(ip, "abuseipdb", result, db)
-    return result
-
-
-@app.post("/api/osint/malwarebazaar")
-async def api_malwarebazaar(hash: str, db: Session = Depends(get_db)):
-    result = await osint.hash_malwarebazaar(hash)
-    _save_osint(hash, "malwarebazaar", result, db)
-    return result
-
-
-@app.post("/api/osint/leakradar")
-async def api_leakradar(query: str, db: Session = Depends(get_db)):
-    result = await osint.leakradar_search(query)
-    _save_osint(query, "leakradar", result, db)
-    return result
-
-
-@app.get("/api/osint/history")
-def osint_history(db: Session = Depends(get_db)):
-    rows = db.query(OsintResult).order_by(OsintResult.created_at.desc()).limit(50).all()
-    return [
-        {
-            "id": r.id,
-            "query": r.query,
-            "type": r.query_type,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-        }
-        for r in rows
-    ]
-
-
-@app.delete("/api/osint/history")
-def osint_history_clear(db: Session = Depends(get_db)):
-    """[Módulo OSINT] Vacía todo el historial de consultas (botón 🗑 Limpiar)."""
-    n = db.query(OsintResult).delete()
-    db.commit()
-    return {"deleted": n}
-
-
-@app.get("/api/osint/history/{result_id}")
-def osint_result(result_id: int, db: Session = Depends(get_db)):
-    r = db.query(OsintResult).filter(OsintResult.id == result_id).first()
-    if not r:
-        raise HTTPException(404, "Not found")
-    return json.loads(r.result or "{}")
-
-
-def _save_osint(query: str, qtype: str, result: dict, db: Session):
-    r = OsintResult(query=query, query_type=qtype, result=json.dumps(result))
-    db.add(r)
-    db.commit()
-
+app.include_router(osint_router)
 
 # ─── Settings (API Keys) ──────────────────────────────────────────────────────
 
-SETTINGS_KEYS = [
-    "ANTHROPIC_API_KEY",
-    "VIRUSTOTAL_API_KEY",
-    "ABUSEIPDB_API_KEY",
-    "MALWAREBAZAAR_API_KEY",
-    "HUNTER_API_KEY",
-    "SHODAN_API_KEY",
-    "URLSCAN_API_KEY",
-    "HIBP_API_KEY",
-    "LEAKRADAR_API_KEY",
-    "ANYRUN_API_KEY",
-]
-
-
-def _mask(val: str) -> str:
-    if not val:
-        return ""
-    if len(val) <= 8:
-        return "*" * len(val)
-    return val[:4] + "*" * (len(val) - 8) + val[-4:]
-
-
-def _read_env_file() -> dict:
-    env_path = RUNTIME_DIR / ".env"
-    pairs = {}
-    if env_path.exists():
-        for line in env_path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                k, _, v = line.partition("=")
-                pairs[k.strip()] = v.strip()
-    return pairs
-
-
-def _write_env_file(pairs: dict):
-    env_path = RUNTIME_DIR / ".env"
-    # Read existing lines to preserve comments/order
-    existing_lines = []
-    if env_path.exists():
-        existing_lines = env_path.read_text(encoding="utf-8").splitlines()
-
-    written = set()
-    new_lines = []
-    for line in existing_lines:
-        stripped = line.strip()
-        if stripped and not stripped.startswith("#") and "=" in stripped:
-            k = stripped.partition("=")[0].strip()
-            if k in pairs:
-                new_lines.append(f"{k}={pairs[k]}")
-                written.add(k)
-                continue
-        new_lines.append(line)
-
-    # Append any new keys not already in file
-    for k, v in pairs.items():
-        if k not in written:
-            new_lines.append(f"{k}={v}")
-
-    env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
-
-
-@app.get("/api/settings")
-def get_settings():
-    pairs = _read_env_file()
-    result = {}
-    for k in SETTINGS_KEYS:
-        val = pairs.get(k, "")
-        result[k] = {"masked": _mask(val), "set": bool(val)}
-    return result
-
-
-class SettingsIn(BaseModel):
-    keys: dict[str, str]
-
-
-@app.post("/api/settings")
-def save_settings(data: SettingsIn):
-    # Only allow whitelisted keys
-    filtered = {k: v for k, v in data.keys.items() if k in SETTINGS_KEYS}
-    if not filtered:
-        raise HTTPException(400, "No valid keys provided")
-
-    _write_env_file(filtered)
-
-    # Reload into current process environment + dependent modules
-    load_dotenv(dotenv_path=RUNTIME_DIR / ".env", encoding="utf-8", override=True)
-    import claude_service as _ai
-    import osint_tools as _osint
-    _ai.client = None  # force re-init on next call
-    # Reload API keys in osint module
-    for k in filtered:
-        val = os.getenv(k, "")
-        if k == "SHODAN_API_KEY":
-            _osint.SHODAN_KEY = val
-        elif k == "VIRUSTOTAL_API_KEY":
-            _osint.VT_KEY = val
-        elif k == "HUNTER_API_KEY":
-            _osint.HUNTER_KEY = val
-        elif k == "URLSCAN_API_KEY":
-            _osint.URLSCAN_KEY = val
-        elif k == "ABUSEIPDB_API_KEY":
-            _osint.ABUSEIPDB_KEY = val
-        elif k == "MALWAREBAZAAR_API_KEY":
-            _osint.MALWAREBAZAAR_KEY = val
-        elif k == "HIBP_API_KEY":
-            _osint.HIBP_KEY = val
-        elif k == "LEAKRADAR_API_KEY":
-            _osint.LEAKRADAR_KEY = val
-        elif k == "ANYRUN_API_KEY":
-            _osint.ANYRUN_KEY = val
-
-    return {"saved": list(filtered.keys())}
-
+app.include_router(settings_router)
 
 # ─── Run ───────────────────────────────────────────────────────────────────────
 
 # ─── Audit Progress ────────────────────────────────────────────────────────────
 
-from models import AuditProgress
-
-
-@app.get("/api/audit/{audit_type}/progress")
-def get_audit_progress(audit_type: str, db: Session = Depends(get_db)):
-    rows = db.query(AuditProgress).filter(AuditProgress.audit_type == audit_type).all()
-    return {r.item_id: {"done": r.done, "notes": r.notes} for r in rows}
-
-
-class AuditItemIn(BaseModel):
-    done: bool
-    notes: Optional[str] = None
-
-
-@app.post("/api/audit/{audit_type}/item/{item_id}")
-def set_audit_item(audit_type: str, item_id: str, data: AuditItemIn, db: Session = Depends(get_db)):
-    row = db.query(AuditProgress).filter(
-        AuditProgress.audit_type == audit_type,
-        AuditProgress.item_id == item_id,
-    ).first()
-    if row:
-        row.done = data.done
-        row.notes = data.notes
-        row.updated_at = datetime.utcnow()
-    else:
-        row = AuditProgress(audit_type=audit_type, item_id=item_id, done=data.done, notes=data.notes)
-        db.add(row)
-    db.commit()
-    return {"ok": True}
-
-
-@app.delete("/api/audit/{audit_type}/reset")
-def reset_audit(audit_type: str, db: Session = Depends(get_db)):
-    db.query(AuditProgress).filter(AuditProgress.audit_type == audit_type).delete()
-    db.commit()
-    return {"ok": True}
-
-
-@app.get("/api/audit/all/summary")
-def audit_summary(db: Session = Depends(get_db)):
-    from sqlalchemy import func
-    from sqlalchemy import Integer as SAInt
-    rows = db.query(AuditProgress.audit_type, func.count(AuditProgress.id), func.sum(AuditProgress.done.cast(SAInt))).group_by(AuditProgress.audit_type).all()
-    return {r[0]: {"total_done": int(r[2] or 0), "total_checked": r[1]} for r in rows}
-
-
-class ReportItem(BaseModel):
-    id: str
-    text: str
-    done: bool
-    notes: Optional[str] = None
-    severity: Optional[str] = None
-
-
-class ReportRequest(BaseModel):
-    audit_type: str
-    audit_name: str
-    items: list[ReportItem]
-    progress: int
-
-
-@app.post("/api/audit/generate-report")
-async def generate_report(req: ReportRequest):
-    if not req.items:
-        raise HTTPException(400, "No items provided")
-    result = ai.generate_audit_report(
-        audit_type=req.audit_name,
-        items=[i.model_dump() for i in req.items],
-        progress=req.progress,
-    )
-    return result
-
-
-# ─── Commands OS filter ────────────────────────────────────────────────────────
-
-class CommandIn(BaseModel):
-    command: str
-    description: Optional[str] = None
-    tool_name: Optional[str] = None
-    os: str = "linux"
-    category: Optional[str] = None
-    tags: Optional[list[str]] = None
-
-
-@app.post("/api/commands", status_code=201)
-def create_command(data: CommandIn, db: Session = Depends(get_db)):
-    """Create a single command directly (e.g. from Enum/WebVuln 'Save to KB' button).
-
-    INSERT OR IGNORE semantics: if an identical command already exists in the same
-    category, return it instead of creating a duplicate.
-    """
-    existing = (
-        db.query(Command)
-        .filter(Command.command == data.command, Command.category == data.category)
-        .first()
-    )
-    if existing:
-        return _cmd_dict(existing)
-
-    c = Command(
-        command=data.command,
-        description=data.description,
-        tool_name=data.tool_name,
-        os=data.os,
-        category=data.category,
-        tags=json.dumps(data.tags or []),
-        flags="[]",
-        examples="[]",
-    )
-    db.add(c)
-    db.commit()
-    db.refresh(c)
-    return _cmd_dict(c)
-
-
-@app.get("/api/commands")
-def list_commands(
-    search: Optional[str] = None,
-    tool: Optional[str] = None,
-    os: Optional[str] = None,
-    db: Session = Depends(get_db),
-):
-    q = db.query(Command)
-    if tool:
-        q = q.filter(Command.tool_name.ilike(f"%{tool}%"))
-    if os and os != "all":
-        q = q.filter((Command.os == os) | (Command.os == "both"))
-    if search:
-        q = q.filter(Command.command.ilike(f"%{search}%") | Command.description.ilike(f"%{search}%"))
-    cmds = q.order_by(Command.created_at.desc()).limit(500).all()
-    return [_cmd_dict(c) for c in cmds]
-
+app.include_router(audits_router)
 
 # ─── MITRE ATT&CK ─────────────────────────────────────────────────────────────
 
-@app.get("/api/mitre")
-def list_mitre(db: Session = Depends(get_db)):
-    """Return all MITRE techniques grouped by tactic."""
-    rows = db.query(MitreTechnique).order_by(MitreTechnique.tactic, MitreTechnique.technique_id).all()
-    grouped: dict = {}
-    for r in rows:
-        tactic = r.tactic or "Uncategorized"
-        grouped.setdefault(tactic, []).append({
-            "id": r.id,
-            "technique_id": r.technique_id,
-            "technique_name": r.technique_name,
-            "tactic": r.tactic,
-            "context_snippet": r.context_snippet,
-            "note_id": r.note_id,
-        })
-    return {"tactics": grouped, "total": len(rows)}
-
-
-@app.get("/api/mitre/search")
-def search_mitre(q: str = "", db: Session = Depends(get_db)):
-    """Search MITRE techniques by ID, name or tactic."""
-    query = db.query(MitreTechnique)
-    if q:
-        like = f"%{q}%"
-        query = query.filter(
-            MitreTechnique.technique_id.ilike(like) |
-            MitreTechnique.technique_name.ilike(like) |
-            MitreTechnique.tactic.ilike(like) |
-            MitreTechnique.context_snippet.ilike(like)
-        )
-    rows = query.order_by(MitreTechnique.tactic, MitreTechnique.technique_id).limit(200).all()
-    return [
-        {
-            "id": r.id,
-            "technique_id": r.technique_id,
-            "technique_name": r.technique_name,
-            "tactic": r.tactic,
-            "context_snippet": r.context_snippet,
-            "note_id": r.note_id,
-        }
-        for r in rows
-    ]
-
-
-# ─── Catálogo de referencia ATT&CK (dataset compacto local) ───────────────────
-# MITRE no ofrece API REST para buscar técnicas, así que llevamos un JSON compacto
-# (id, nombre, tácticas, descripción corta) generado del STIX oficial v19.2. Sirve
-# para el buscador "añadir técnica" y para corregir la táctica de lo que detecta la
-# IA (ver _persist_mitre). La URL de cada técnica se deriva del ID, no se guarda.
-def _load_mitre_ref() -> list:
-    try:
-        with open(BUNDLE_DIR / "mitre_reference.json", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return []
-
-_MITRE_REF = _load_mitre_ref()
-_MITRE_REF_BY_ID = {t["id"]: t for t in _MITRE_REF}
-
-
-@app.get("/api/mitre/reference")
-def mitre_reference(q: str = "", limit: int = 40):
-    """[Módulo MITRE] Busca en el catálogo de referencia ATT&CK (local) por ID
-    (T1055), nombre o táctica. Alimenta el buscador de "añadir técnica". Prioriza
-    las coincidencias de ID/nombre sobre las de táctica."""
-    query = (q or "").strip().lower()
-    if not query:
-        return {"count": 0, "results": []}
-
-    def score(t):
-        idl, nm = t["id"].lower(), t["name"].lower()
-        if idl == query: return 0
-        if idl.startswith(query): return 1
-        if query in idl: return 2
-        if nm.startswith(query): return 3
-        if query in nm: return 4
-        return 5
-
-    matches = [t for t in _MITRE_REF
-               if query in t["id"].lower() or query in t["name"].lower()
-               or any(query in tac.lower() for tac in t.get("tactics", []))]
-    matches.sort(key=score)
-    return {"count": len(matches), "results": matches[:limit]}
-
-
-class MitreCreate(BaseModel):
-    technique_id: str
-
-
-@app.post("/api/mitre", status_code=201)
-def create_mitre(data: MitreCreate, db: Session = Depends(get_db)):
-    """[Módulo MITRE] Añade una técnica a la KB desde el buscador de referencia.
-    Rellena nombre/táctica/descripción desde el catálogo. Upsert por technique_id
-    de las añadidas a mano (note_id NULL): si ya está, no la duplica."""
-    tid = (data.technique_id or "").strip().upper()
-    if not re.match(r"^T\d{4}(\.\d{3})?$", tid):
-        raise HTTPException(400, "ID de técnica inválido (esperado T#### o T####.###)")
-    ref = _MITRE_REF_BY_ID.get(tid)
-    if not ref:
-        raise HTTPException(404, f"{tid} no está en el catálogo de referencia ATT&CK")
-    existing = db.query(MitreTechnique).filter(
-        MitreTechnique.technique_id == tid, MitreTechnique.note_id.is_(None)).first()
-    if existing:
-        return {"created": False, "id": existing.id, "technique_id": tid}
-    mt = MitreTechnique(
-        note_id=None, technique_id=tid, technique_name=ref["name"],
-        tactic=(ref.get("tactics") or [None])[0], context_snippet=ref.get("desc"))
-    db.add(mt); db.commit(); db.refresh(mt)
-    return {"created": True, "id": mt.id, "technique_id": tid}
-
-
-@app.delete("/api/mitre/technique/{tid}", status_code=204)
-def delete_mitre_technique(tid: str, db: Session = Depends(get_db)):
-    """[Módulo MITRE] Quita una técnica del módulo POR COMPLETO: borra todas sus
-    filas (vengan de notas o añadidas a mano). Es lo que hace el 🗑 de la tarjeta,
-    que en la vista está agregada por técnica (2A)."""
-    tid = (tid or "").strip().upper()
-    rows = db.query(MitreTechnique).filter(MitreTechnique.technique_id == tid).all()
-    if not rows:
-        raise HTTPException(404, "Técnica no encontrada")
-    for r in rows:
-        db.delete(r)
-    db.commit()
-    return
-
-
-@app.delete("/api/mitre/{mid}", status_code=204)
-def delete_mitre(mid: int, db: Session = Depends(get_db)):
-    """[Módulo MITRE] Borra una fila concreta de técnica por su id numérico."""
-    row = db.query(MitreTechnique).filter(MitreTechnique.id == mid).first()
-    if not row:
-        raise HTTPException(404, "Técnica no encontrada")
-    db.delete(row); db.commit()
-    return
-
+app.include_router(mitre_router)
 
 # ─── Forensic Mode ────────────────────────────────────────────────────────────
 
-def _family_from_vt_label(label: str) -> str:
-    """Extrae la familia de la etiqueta sugerida de VT: 'ransomware.wannacry/x'
-    → 'Wannacry'. Se usa solo como respaldo de la firma de MalwareBazaar."""
-    if not label:
-        return ""
-    core = label.split(".", 1)[1] if "." in label else label   # quita la categoría
-    fam = core.split("/")[0].strip()                           # familia antes de la variante
-    return fam.capitalize()
+app.include_router(forensic_router)
 
-
-@app.get("/api/forensic/keys")
-def forensic_keys():
-    """[Módulo Forense] Presencia de las keys que usa el pipeline. Lo usa el
-    frontend para avisar antes de analizar si falta alguna esencial. Solo dice si
-    están puestas (no si son válidas — eso se comprueba al analizar de verdad)."""
-    return {
-        "virustotal":    bool(osint.VT_KEY),
-        "malwarebazaar": bool(osint.MALWAREBAZAAR_KEY),
-        "anyrun":        bool(osint.ANYRUN_KEY),
-    }
-
-
-@app.post("/api/forensic/analyze")
-async def forensic_analyze(hash: str, db: Session = Depends(get_db)):
-    """Full forensic pipeline: VT + MalwareBazaar (parallel) → Any.run (conditional) → AI note."""
-    import asyncio
-
-    hash_str = hash.strip().lower()
-    if not re.match(r"^[0-9a-f]{32}$|^[0-9a-f]{40}$|^[0-9a-f]{64}$", hash_str):
-        raise HTTPException(400, "Hash inválido — se admite MD5 (32), SHA1 (40) o SHA256 (64 hex)")
-
-    # ── Step 1+2: VT + MalwareBazaar in parallel ──────────────────────────────
-    vt_task  = osint.hash_vt(hash_str)
-    mb_task  = osint.hash_malwarebazaar(hash_str)
-    vt_data, mb_data = await asyncio.gather(vt_task, mb_task)
-
-    # ── 1C: chequeo de keys ───────────────────────────────────────────────────
-    # Si una key esencial no está o no funciona (auth_error), paramos ANTES de
-    # gastar la IA y avisamos. MalwareBazaar solo consulta SHA256; con MD5/SHA1
-    # su error no es de key, así que solo cuenta como fallo de key si es SHA256.
-    bad_keys = []
-    if vt_data.get("auth_error"):
-        bad_keys.append("VirusTotal")
-    if mb_data.get("auth_error") and len(hash_str) == 64:
-        bad_keys.append("MalwareBazaar")
-    if bad_keys:
-        raise HTTPException(400, "API keys no configuradas o inválidas: "
-                            + ", ".join(bad_keys) + ". Configúralas en Ajustes (⚙).")
-
-    # ── 2A: sin datos → no alucinar ───────────────────────────────────────────
-    # Si ni VT ni MalwareBazaar tienen datos del hash (desconocido/nunca subido),
-    # NO llamamos a la IA (inventaría el informe): guardamos una nota honesta.
-    if vt_data.get("error") and mb_data.get("error"):
-        title = f"Análisis forense — {hash_str[:16]} — sin datos"
-        body = (f"**Hash**: `{hash_str}`\n\n## Sin datos de reputación\n"
-                "Ni VirusTotal ni MalwareBazaar tienen información de este hash "
-                "(muestra desconocida o nunca subida). No se genera análisis para "
-                "no especular sin datos.\n\n"
-                f"- VirusTotal: {vt_data.get('error', '—')}\n"
-                f"- MalwareBazaar: {mb_data.get('error', '—')}\n")
-        n = Note(title=title, content=body, category="forense",
-                 subcategory="malware-analysis", summary="Hash sin datos de reputación",
-                 tags=json.dumps(["forense", "malware", "sin-datos", "veredicto:sin-datos"]),
-                 source_file=f"forensic:{hash_str[:16]}")
-        db.add(n); db.commit(); db.refresh(n)
-        return {"note_id": n.id, "title": title, "vt": vt_data, "mb": mb_data,
-                "anyrun": {"note": "no consultado (sin datos)"}, "timeline": {},
-                "cves_found": 0, "mitre_found": 0, "tags": ["sin-datos"], "no_data": True}
-
-    # ── Step 3: Any.run if VT detections > 5 ─────────────────────────────────
-    anyrun_data: dict = {"note": "No consultado (score VT ≤ 5 o error)"}
-    vt_detected = vt_data.get("detected", 0) if not vt_data.get("error") else 0
-    if vt_detected > 5:
-        anyrun_data = await osint.anyrun_lookup(hash_str)
-
-    # ── Step 4: AI synthesis ──────────────────────────────────────────────────
-    note_data = ai.generate_forensic_note(hash_str, vt_data, mb_data, anyrun_data)
-
-    # ── Step 5: Persist note ──────────────────────────────────────────────────
-    title = note_data.get("title") or f"Análisis forense — {hash_str[:16]}"
-    content_body = note_data.get("content", "")
-    htype = {32: "MD5", 40: "SHA1", 64: "SHA256"}.get(len(hash_str), "Hash")
-
-    # Prepend timeline block to content
-    tl = note_data.get("timeline", {})
-    tl_items = [
-        ("Creación malware",   tl.get("created", "")),
-        ("Primera subida VT",  tl.get("first_submission", "")),
-        ("Primera vez in-wild",tl.get("first_seen_itw", "")),
-        ("Último análisis",    tl.get("last_analysis", "")),
-    ]
-    tl_md = "\n".join(f"- **{label}**: {val}" for label, val in tl_items if val)
-    if tl_md:
-        content_body = f"## Timeline\n{tl_md}\n\n" + content_body
-
-    # Include raw hash at top (con su tipo real: MD5/SHA1/SHA256)
-    content_body = f"**{htype}**: `{hash_str}`\n\n" + content_body
-
-    # Veredicto de 2 palabras para el histórico (según detecciones de VirusTotal;
-    # si VT no dio score pero MalwareBazaar sí conoce el hash, es malware conocido).
-    det = vt_data.get("detected", 0) if not vt_data.get("error") else None
-    if det is not None:
-        verdict = "limpio" if det == 0 else ("sospechoso" if det <= 4 else "infeccion")
-    else:
-        verdict = "infeccion" if not mb_data.get("error") else "sin-datos"
-
-    # Nombre de familia SOLO si lo tenemos con confianza: la firma curada de
-    # MalwareBazaar, o (con muchas detecciones) la etiqueta sugerida de VT. Si no,
-    # el histórico se queda con el veredicto genérico ("Posible infección"…).
-    familia = ""
-    if not mb_data.get("error") and mb_data.get("signature"):
-        familia = str(mb_data["signature"]).strip()
-    elif det and det >= 5 and vt_data.get("suggested_label"):
-        familia = _family_from_vt_label(vt_data["suggested_label"])
-
-    base_tags = ["forense", "malware", "veredicto:" + verdict]
-    if familia:
-        base_tags.append("familia:" + familia)
-    tags = note_data.get("tags", [])
-    tags_json = json.dumps(list(set(base_tags + tags)))
-
-    n = Note(
-        title=title,
-        content=content_body[:20000],
-        category="forense",
-        subcategory="malware-analysis",
-        summary=note_data.get("summary") or title,
-        tags=tags_json,
-        source_file=f"forensic:{hash_str[:16]}",
-    )
-    db.add(n)
-    db.commit()
-    db.refresh(n)
-
-    # Persist CVEs
-    for cve_item in note_data.get("cves", []):
-        cve_id = cve_item.get("id", "").strip()
-        if not cve_id:
-            continue
-        if not db.query(CVE).filter(CVE.cve_id == cve_id).first():
-            db.add(CVE(cve_id=cve_id, description=cve_item.get("description"), note_id=n.id))
-    db.commit()
-
-    # Persist MITRE techniques
-    _persist_mitre(note_data.get("mitre_techniques", []), n, db)
-
-    # Reanalisis via Agrupador (tools/commands/cves/mitre/entidades), unificado
-    # con /api/notes/{id}/extract y /api/graph/reindex-all (2026-09-29).
-    # category/subcategory/tags se conservan (ver _reanalizar_con_agrupador):
-    # la clasificacion especializada de ai.generate_forensic_note() no se pisa.
-    # Probado con datos reales antes de aplicarlo: enriquece CVEs existentes sin
-    # duplicar, MITRE sin cambios; unico efecto secundario, ruido menor en
-    # tools (p.ej. "VirusTotal" puede colarse como herramienta) -- aceptado.
-    try:
-        _reanalizar_con_agrupador(n, db)
-    except Exception:
-        import traceback
-        traceback.print_exc()
-
-    return {
-        "note_id":    n.id,
-        "title":      title,
-        "vt":         vt_data,
-        "mb":         mb_data,
-        "anyrun":     anyrun_data,
-        "timeline":   tl,
-        "cves_found": len(note_data.get("cves", [])),
-        "mitre_found":len(note_data.get("mitre_techniques", [])),
-        "tags":       tags,
-    }
-
+# Routers de la cadena de agentes del Editor (los usan /api/upload y /api/analyze)
+app.include_router(cinefilo_router)
+app.include_router(escritor_router)
+app.include_router(agrupador_router)
+app.include_router(bbdd_router)
+app.include_router(obsi_router)
 
 if __name__ == "__main__":
     import multiprocessing

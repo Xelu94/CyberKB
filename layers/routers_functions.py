@@ -1,0 +1,284 @@
+import json
+from models import OsintResult
+from sqlalchemy.orm import Session
+from typing import Optional
+from pydantic import BaseModel
+from models import CVE, Command, Tool, Note, MitreTechnique, GraphEntity
+import claude_service as ai
+from pathlib import Path
+import sys
+from dotenv import load_dotenv
+
+
+class NoteIn(BaseModel):
+    title: str
+    content: str
+    category: str = "teoria"
+    subcategory: Optional[str] = None
+    summary: Optional[str] = None
+    tags: Optional[list[str]] = None
+    source_file: Optional[str] = None
+
+
+class AnalyzeIn(BaseModel):
+    text: str
+    title: Optional[str] = None
+
+
+class ChatIn(BaseModel):
+    question: str
+
+
+class SettingsIn(BaseModel):
+    keys: dict[str, str]
+
+
+class ToolUpdate(BaseModel):
+    url: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    use_cases: Optional[list[str]] = None
+    requires_api: Optional[bool] = None
+    api_info: Optional[str] = None
+
+
+class ToolCreate(BaseModel):
+    name: str
+    url: Optional[str] = None
+    description: Optional[str] = None
+    category: Optional[str] = None
+    tool_type: Optional[str] = "software"
+    requires_api: Optional[bool] = False
+    api_info: Optional[str] = None
+
+
+class CommandIn(BaseModel):
+    command: str
+    description: Optional[str] = None
+    tool_name: Optional[str] = None
+    os: str = "linux"
+    category: Optional[str] = None
+    tags: Optional[list[str]] = None
+
+
+class AuditItemIn(BaseModel):
+    done: bool
+    notes: Optional[str] = None
+
+
+class ReportItem(BaseModel):
+    id: str
+    text: str
+    done: bool
+    notes: Optional[str] = None
+    severity: Optional[str] = None
+
+
+class ReportRequest(BaseModel):
+    audit_type: str
+    audit_name: str
+    items: list[ReportItem]
+    progress: int
+
+
+def _save_osint(query: str, qtype: str, result: dict, db: Session):
+    r = OsintResult(query=query, query_type=qtype, result=json.dumps(result))
+    db.add(r)
+    db.commit()
+
+
+def _cve_dict(c: CVE) -> dict:
+    return {
+        "id": c.id,
+        "cve_id": c.cve_id,
+        "title": c.title,
+        "description": c.description,
+        "severity": c.severity,
+        "cvss": c.cvss,
+        "note_id": c.note_id,
+    }
+
+
+def _cmd_dict(c: Command) -> dict:
+    return {
+        "id": c.id,
+        "command": c.command,
+        "description": c.description,
+        "tool_name": c.tool_name,
+        "os": c.os or "linux",
+        "flags": json.loads(c.flags or "[]"),
+        "examples": json.loads(c.examples or "[]"),
+        "tags": json.loads(c.tags or "[]"),
+        "category": c.category,
+        "note_id": c.note_id,
+    }
+
+
+def _tool_dict(t: Tool) -> dict:
+    return {
+        "id": t.id,
+        "name": t.name,
+        "url": t.url,
+        "description": t.description,
+        "category": t.category,
+        "tool_type": t.tool_type or "software",
+        "use_cases": json.loads(t.use_cases or "[]"),
+        "tags": json.loads(t.tags or "[]"),
+        "requires_api": t.requires_api,
+        "api_info": t.api_info,
+        "mention_count": t.mention_count,
+        "created_at": t.created_at.isoformat() if t.created_at else None,
+    }
+
+
+def _note_dict(n: Note, full: bool = False) -> dict:
+    d = {
+        "id": n.id,
+        "title": n.title,
+        "category": n.category,
+        "subcategory": n.subcategory,
+        "summary": n.summary,
+        "tags": json.loads(n.tags or "[]"),
+        "source_file": n.source_file,
+        "created_at": n.created_at.isoformat() if n.created_at else None,
+        "updated_at": n.updated_at.isoformat() if n.updated_at else None,
+    }
+    if full:
+        d["content"] = n.content
+        d["commands"] = [_cmd_dict(c) for c in n.commands]
+        d["cves"] = [_cve_dict(c) for c in n.cves]
+        d["tools"] = [_tool_dict(t) for t in n.tools]
+    return d
+
+
+def _runtime_dir() -> Path:
+    """Where user data lives (.env, data/, uploads/) — always next to exe/script."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).parent
+    return Path(__file__).parent
+
+
+# ─── Catálogo de referencia ATT&CK (dataset compacto local, STIX v19.2) ───────
+# Lo usan el buscador "añadir técnica" (router mitre) y _persist_mitre, para
+# corregir la táctica/nombre de lo que detecta la IA. La URL se deriva del ID.
+def _mitre_ref_path() -> Path:
+    base = Path(sys._MEIPASS) if getattr(sys, "frozen", False) else Path(__file__).resolve().parents[1]
+    return base / "mitre_reference.json"
+
+
+def _load_mitre_ref() -> list:
+    try:
+        with open(_mitre_ref_path(), encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+_MITRE_REF = _load_mitre_ref()
+_MITRE_REF_BY_ID = {t["id"]: t for t in _MITRE_REF}
+
+
+def _persist_mitre(techniques: list, note: Note, db: Session):
+    """Upsert de técnicas ATT&CK extraídas de una nota.
+
+    Si el ID está en el catálogo de referencia (mitre_reference.json), usamos su
+    táctica/nombre canónicos en lugar de los que devuelve la IA (que a veces se
+    equivoca de táctica); así nada cae en "Uncategorized" por un fallo del modelo.
+    """
+    for td in techniques:
+        tid = td.get("id", "").strip().upper()
+        if not tid:
+            continue
+        existing = db.query(MitreTechnique).filter(
+            MitreTechnique.technique_id == tid,
+            MitreTechnique.note_id == note.id
+        ).first()
+        if not existing:
+            ref = _MITRE_REF_BY_ID.get(tid)
+            mt = MitreTechnique(
+                note_id=note.id,
+                technique_id=tid,
+                technique_name=(ref["name"] if ref else td.get("name")),
+                tactic=((ref.get("tactics") or [None])[0] if ref else td.get("tactic")),
+                context_snippet=td.get("snippet"),
+            )
+            db.add(mt)
+    db.commit()
+
+
+def _reanalizar_con_agrupador(n: Note, db: Session) -> dict:
+    """Re-envia una nota ya existente por el Agrupador: mismo titulo/fichero de
+    origen para que Agente-BBDD la reconozca como la misma fila (upsert, no
+    duplicado) y actualice tools/commands/cves/mitre/entidades a la vez.
+
+    source="app-reextract" le dice a Agente-BBDD que NO toque
+    category/subcategory/tags de la nota: aqui la nota ya existia y pudo
+    curarse a mano, asi que su clasificacion no se pisa.
+
+    Import lazy de los agentes: sus carpetas las pone main.py en sys.path al
+    arrancar; importar aqui dentro evita depender del orden de carga."""
+    import uuid
+    from agrupador import _procesar as _agrupador_procesar, ResumenEscritor
+    resumen = ResumenEscritor(
+        id=uuid.uuid4().hex,
+        titulo=n.title,
+        resumen=n.content or n.summary or "",
+        source="app-reextract",
+        archivo_original=n.source_file,
+    )
+    return _agrupador_procesar(resumen)
+
+
+RUNTIME_DIR = _runtime_dir()
+
+load_dotenv(dotenv_path=RUNTIME_DIR / ".env", encoding="utf-8", override=True)
+(RUNTIME_DIR / "data").mkdir(exist_ok=True)
+
+
+def _read_env_file() -> dict:
+    env_path = RUNTIME_DIR / ".env"
+    pairs = {}
+    if env_path.exists():
+        for line in env_path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, _, v = line.partition("=")
+                pairs[k.strip()] = v.strip()
+    return pairs
+
+
+def _mask(val: str) -> str:
+    if not val:
+        return ""
+    if len(val) <= 8:
+        return "*" * len(val)
+    return val[:4] + "*" * (len(val) - 8) + val[-4:]
+
+
+def _write_env_file(pairs: dict):
+    env_path = RUNTIME_DIR / ".env"
+    # Read existing lines to preserve comments/order
+    existing_lines = []
+    if env_path.exists():
+        existing_lines = env_path.read_text(encoding="utf-8").splitlines()
+
+    written = set()
+    new_lines = []
+    for line in existing_lines:
+        stripped = line.strip()
+        if stripped and not stripped.startswith("#") and "=" in stripped:
+            k = stripped.partition("=")[0].strip()
+            if k in pairs:
+                new_lines.append(f"{k}={pairs[k]}")
+                written.add(k)
+                continue
+        new_lines.append(line)
+
+    # Append any new keys not already in file
+    for k, v in pairs.items():
+        if k not in written:
+            new_lines.append(f"{k}={v}")
+
+    env_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+
+

