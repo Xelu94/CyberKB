@@ -152,10 +152,12 @@ def _note_dict(n: Note, full: bool = False) -> dict:
 
 
 def _runtime_dir() -> Path:
-    """Where user data lives (.env, data/, uploads/) — always next to exe/script."""
+    """Where user data lives (.env, data/, uploads/) — always the project root
+    (donde esta main.py). Como este fichero vive en layers/, la raiz es parents[1]:
+    usar .parent apuntaria a layers/ y Ajustes leeria/escribiria un .env erroneo."""
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
-    return Path(__file__).parent
+    return Path(__file__).resolve().parents[1]
 
 
 # ─── Catálogo de referencia ATT&CK (dataset compacto local, STIX v19.2) ───────
