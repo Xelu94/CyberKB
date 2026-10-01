@@ -1,180 +1,165 @@
-# CyberKB v5.8 — Cybersecurity Knowledge Base
+# CyberKB
 
-> Base de conocimiento de ciberseguridad potenciada por IA (Claude Sonnet). Gestiona notas, comandos, herramientas, CVEs, consultas OSINT, threat intelligence y análisis forense desde una interfaz local sin depender de servicios externos.
+> Base de conocimiento de ciberseguridad potenciada por IA. Centraliza notas, comandos, herramientas, CVEs, técnicas MITRE ATT&CK y resultados de OSINT en una única aplicación local, con una cadena de agentes que convierte automáticamente cualquier documento o vídeo en conocimiento estructurado.
 
 ![Python](https://img.shields.io/badge/Python-3.11%2B-blue)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688)
 ![SQLite](https://img.shields.io/badge/SQLite-local-lightgrey)
-![Claude](https://img.shields.io/badge/IA-Claude%20Sonnet-orange)
+![Claude](https://img.shields.io/badge/IA-Claude-orange)
+![Obsidian](https://img.shields.io/badge/Grafo-Obsidian-7C3AED)
 ![License](https://img.shields.io/badge/license-MIT-green)
-![Version](https://img.shields.io/badge/version-5.8-purple)
+![Version](https://img.shields.io/badge/versión-5.8-purple)
+
+---
+
+## Equipo de desarrollo
+
+Proyecto desarrollado en el Máster en Ciberseguridad de [Evolve](https://evolve.es).
+
+| | Rol |
+|---|---|
+| **José Luis Cuartero** | Creador y autor inicial — construyó la aplicación desde su origen: arquitectura, servidor, interfaz e integración con IA |
+| **Adrián García-Largo Moreno** | Dirección del proyecto e integración — dirigió el proyecto e inspeccionó la infraestructura inicial y de los agentes |
+| **Manuel Valdivielso Rodríguez** | Módulos de seguridad e integración — desarrolló los módulos de seguridad y unificó las tres líneas de trabajo del proyecto |
+| **Ignacio Cano Peñalver** | Reorganización del servidor — repartió entre doce módulos independientes las funciones antes concentradas en un único fichero |
 
 ---
 
 ## ¿Qué es CyberKB?
 
-CyberKB es una aplicación **local** de escritorio pensada para profesionales y estudiantes de ciberseguridad. Permite importar documentos (PDF, ODT, TXT, MD) y extraer automáticamente mediante IA todo el conocimiento relevante: notas, comandos, herramientas, CVEs, técnicas MITRE ATT&CK y entidades del grafo de conocimiento.
+CyberKB es una aplicación **local** de escritorio para profesionales y estudiantes de ciberseguridad. Se le importa un documento (PDF, ODT, DOCX, HTML, TXT, MD, LOG) o la URL de un vídeo, y una cadena de agentes especializados lo analiza, lo filtra, lo resume y lo clasifica automáticamente en notas, comandos, herramientas, CVEs, técnicas MITRE ATT&CK y entidades relacionadas — sin intervención manual.
 
-Más allá del gestor de notas, CyberKB integra un flujo ofensivo completo: desde el reconocimiento OSINT, pasando por la enumeración activa, la correlación con threat intelligence en tiempo real, hasta la generación de informes técnicos y ejecutivos para el cliente.
+Más allá del gestor de conocimiento, integra un flujo ofensivo completo: reconocimiento OSINT, enumeración activa de red y servicios, un módulo dedicado a vulnerabilidades web, threat intelligence en tiempo real, análisis forense automático por hash y generación de informes de auditoría técnicos y ejecutivos.
 
-Todo corre **en local**. Tus datos nunca salen de tu máquina salvo las llamadas explícitas a las APIs que tú configures.
+Todo corre **en local**. La base de datos es un fichero SQLite en tu máquina, y la información solo sale de ella cuando llamas explícitamente a un servicio externo cuya clave hayas configurado tú mismo.
 
 ## ¿Qué problema resuelve?
-Cuando estudias ciberseguridad acumulas cientos de notas, PDFs, comandos y CVEs dispersos en carpetas, Notion, bloc de notas… CyberKB centraliza todo ese conocimiento en una sola herramienta local: lo organiza automáticamente con IA, lo hace buscable, y lo conecta visualmente mediante un grafo de conocimiento interactivo.
+
+Cuando estudias o trabajas en ciberseguridad acumulas cientos de notas, PDFs, vídeos de clase, comandos y CVEs dispersos en carpetas, Notion, blocs de notas… CyberKB centraliza todo ese conocimiento en una sola herramienta local: lo organiza automáticamente con IA, lo hace buscable, y lo conecta — tanto en su propio grafo visual como en un vault de Obsidian — sin que tengas que clasificar nada a mano.
+
+---
+
+## Arquitectura
+
+CyberKB se compone de cuatro piezas que funcionan en la misma máquina:
+
+- **Interfaz web** — una página que se abre en el navegador (`index.html`, vanilla JS + D3.js, sin dependencias de compilación) desde la que se accede a todas las funciones.
+- **Servidor de aplicación** — FastAPI. `main.py` es el punto de composición (configuración, ciclo de vida, servicio de la interfaz); la lógica de cada dominio vive en **12 routers independientes** bajo `layers/routers/` (notas, análisis, OSINT, herramientas, comandos, CVEs, MITRE, grafo, auditorías, chat, settings, forense).
+- **Cadena de agentes** — cinco agentes especializados que procesan cada documento o vídeo importado (ver más abajo).
+- **Base de datos** — un fichero SQLite local, creado automáticamente en el primer arranque.
+
+El análisis de contenido lo realiza Claude (Anthropic); la transcripción de vídeo puede usar Whisper (OpenAI) como alternativa. Las consultas de OSINT e inteligencia de amenazas se hacen contra servicios públicos, algunos de los cuales requieren clave de API propia.
+
+### La cadena de agentes
+
+Convertir un documento en conocimiento estructurado no es una sola tarea: leer el fichero, descartar lo irrelevante, resumir, clasificar cada dato, guardarlo sin duplicar y, si procede, sincronizarlo con Obsidian. CyberKB reparte ese trabajo en cinco agentes encadenados, cada uno responsable de un único paso — así un fallo queda aislado, cada etapa se prueba por separado, y el paso más costoso (las llamadas al modelo de IA) solo se ejecuta cuando el contenido ya ha demostrado que merece la pena.
+
+```
+Entrada        documento o URL de vídeo
+   │
+Cinéfilo       transcripción (solo vídeos) — subtítulos o Whisper, descarta lo que no es ciberseguridad
+   │
+Escritor       filtrado y resumen — genera el PDF descargable y el resumen estructurado
+   │
+Agrupador      extracción y clasificación — notas, herramientas, comandos, CVEs, MITRE, grafo
+   │
+Agente-BBDD    guardado en la base de datos — determinista, sin IA, evita duplicados
+   │
+Obsi           copia al vault de Obsidian (opcional) — tampoco usa IA
+   │
+Resultado      nota disponible en la app + descarga en PDF
+```
+
+Si un documento no tiene contenido real (una página en blanco, un escaneo sin texto), el pipeline se detiene en el Escritor sin gastar análisis de IA en vano. Si el proceso falla en cualquier paso, se informa con un error controlado en vez de romper la aplicación.
 
 ---
 
 ## Módulos
 
-| Módulo | Descripción |
+| Módulo | Para qué sirve |
 |---|---|
-| 📝 **Editor** | Notas con categoría, subcategoría, tags, análisis IA automático al subir documentos |
-| ⚙ **Herramientas** | Catálogo de tools detectadas automáticamente con URL, tipo y casos de uso |
-| ⌘ **Comandos** | Cheatsheet filtrable por OS: Linux / Windows / PowerShell / Google Dorks / PrivEsc. Incluye generadores: SQLi, reverse shells, estabilización de shell |
-| ◎ **OSINT** | 18+ herramientas agrupadas por objetivo: dominio, IP, email, URL, credenciales filtradas |
-| 🗺 **Enumeración** | Módulo ofensivo completo: descubrimiento de red, análisis de servicios por puerto, generador Nmap interactivo, cheatsheet y sección Windows/AD |
-| 🕷 **Vulnerabilidades Web** | Fichas de Path Traversal/LFI/RFI, XXE, SSRF y SSTI con detección, payloads y bypass; identificador de motor SSTI |
-| ⬡ **Grafo** | Grafo D3.js de entidades reales: ataques, defensas, herramientas, protocolos, vulnerabilidades, MITRE |
-| ⚠ **CVEs** | Lista de CVEs con severidad, descripción y badges Exploit-DB en tiempo real |
-| ✓ **Auditorías** | Checklists de auditoría (web, red, AD, móvil) con progreso guardado e informes PDF/MD |
-| ⚡ **MITRE ATT&CK** | Técnicas extraídas automáticamente de tus notas, organizadas por táctica con enlace directo |
-| 🔬 **Forense** | Pipeline forense automático SHA256: VirusTotal + MalwareBazaar + Any.run → nota IA |
-| ✦ **Chat IA** | Claude con contexto de toda tu base de conocimiento |
+| 📝 **Editor** | Punto de entrada. Sube un documento o pega la URL de un vídeo; lanza la cadena de agentes y guarda la nota resultante |
+| ⚙ **Herramientas** | Catálogo de herramientas de pentesting, con un set base siempre disponible (nmap, hydra, sqlmap, Burp Suite, Impacket…) más las que la IA detecta en tus documentos |
+| ⌘ **Comandos** | Cheatsheet filtrable por SO (Linux/Windows/PowerShell/Google Dorks/PrivEsc), con generadores: SQLi, reverse shells, estabilización de shell |
+| ◎ **OSINT** | 19 herramientas agrupadas por objetivo: dominio, IP/red, email, URL/web y threat intelligence |
+| 🗺 **Enumeración** | Reconocimiento activo en tres fases: descubrimiento de red, análisis de servicios por puerto (generador Nmap, Windows/AD) y cheatsheet |
+| 🕷 **Vulnerabilidades Web** | Fichas organizadas por OWASP Top 10 (SQLi, XSS, SSTI, SSRF, XXE, LFI, IDOR, Command Injection…), cada una con asistente de explotación por fases |
+| ⬡ **Grafo** | Vista que conecta visualmente las entidades de la base de conocimiento |
+| ⚠ **CVEs** | Listado con severidad, enriquecimiento contra NVD y aviso de exploit público en Exploit-DB |
+| ✓ **Auditorías** | Checklists (Web App, Red, AD, OSINT, Ingeniería Social, Forense, Móvil, WordPress, Metodología Web…) con progreso guardado y generación de informe técnico/ejecutivo |
+| ⚡ **MITRE ATT&CK** | Técnicas extraídas automáticamente de tus notas, corregidas contra el catálogo oficial STIX (697 técnicas), organizadas por táctica |
+| 🔬 **Forense** | Análisis automático de una muestra por hash (MD5/SHA1/SHA256): VirusTotal + MalwareBazaar en paralelo, Any.run si hay muchas detecciones |
+| ✦ **Chat** | Consulta en lenguaje natural sobre el contenido de tu base de conocimiento |
 
 ---
 
-## Novedades v5.8
+## Integración y mejoras del equipo
 
-Bloque de explotación web enfocado en la metodología de pentesting web. Todo frontend, con "Guardar en KB" que persiste el payload/comando en la base de datos (INSERT OR IGNORE, sin duplicados).
+Tras la etapa fundacional en solitario (versiones v3 → v5.8, ver [Historial de versiones](#historial-de-versiones)), el equipo completo se incorporó y llevó cada módulo de seguridad de un esbozo funcional a una integración real contra las fuentes oficiales:
 
-### 🕷 Módulo de Vulnerabilidades Web
-- Nuevo módulo central con una ficha por vulnerabilidad: descripción, cómo detectarla, payloads copiables y técnicas de bypass
-- **Path Traversal / LFI / RFI**: traversal, bypass de filtros no recursivos, URL y double URL encoding, null byte, RFI, y ficheros clave a leer
-- **XXE**: payload base y variantes (id_rsa, código fuente PHP vía php://filter)
-- **SSRF**: bypasses agrupados (sin restricción, blacklist, whitelist, open redirect) + recordatorio de escaneo de red interna con Burp
-- **SSTI**: polyglot de detección, tabla de identificación de motor y RCE de Jinja2
-
-### 🧪 Identificador de motor SSTI
-- Herramienta interactiva: seleccionas el payload probado y pegas la respuesta del servidor
-- Devuelve el/los motores que corresponden y su payload de RCE específico, copiable
-- Cubre Jinja2, Tornado, Mako (Python), ERB (Ruby), FreeMarker, Velocity, Thymeleaf (Java), Twig, Smarty (PHP), Nunjucks (Node.js) y Razor (.NET)
-
-### 📚 Diccionarios y polyglots
-- Payloads polyglot SSTI y XSS, rutas exactas de diccionarios de SecLists (LFI, directorios, template engines, subdominios DNS) y enumeración de parámetros ocultos con x8
-
-### ⚡ Nuevas técnicas de escalada de privilegios
-- Sobreescritura de binario con permisos de escritura, bypass de rbash y persistencia con clave SSH
-- Se fusionan automáticamente en la biblioteca del usuario sin pisar sus técnicas propias
-
-### 🧭 Checklist de Metodología Web
-- Nuevo checklist en Auditorías con el flujo completo: reconocimiento (Nmap, whatweb, código fuente, robots, fuzzing recursivo, CMS) y análisis/explotación por contexto
-
-### 🔧 Correcciones
-- Escapado seguro de payloads con comillas simples y caracteres HTML en todos los botones de copiar/guardar (evita que payloads como los de XSS/SSTI rompan la interfaz)
+- **CVEs** — conexión a la API pública de NVD (NIST) para traer la ficha real de cada CVE, con reintentos ante los cortes intermitentes de Exploit-DB tras Cloudflare.
+- **MITRE ATT&CK** — catálogo local de las 697 técnicas del STIX oficial (*enterprise-attack v19.2*), usado para corregir automáticamente la táctica que la IA asigna al analizar un documento.
+- **Forense** — ajustado con muestras reales; si ningún servicio conoce un hash, la aplicación lo dice explícitamente en vez de dejar que la IA se invente un informe.
+- **OSINT** — las 19 herramientas revisadas una por una: descripciones fieles a lo que devuelven de verdad, aviso de qué clave de API necesita cada una.
+- **Enumeración** — constructor de Nmap rehecho con objetivo global (rellena la IP en todos los comandos a la vez) y buscador de exploits por versión detectada.
+- **Vulnerabilidades Web** — fichas reorganizadas por OWASP Top 10; el generador de SQLi pasó de una lista de payloads a un asistente por fases (detectar → tipo → columnas → explotar) con payloads ciegos (booleanos y por tiempo) adaptados a cada motor de base de datos.
+- **Herramientas** — catálogo base sembrado una sola vez (no reaparece si lo borras) y contador de menciones en vez de duplicar una herramienta ya detectada.
+- **Reorganización del servidor** — `main.py` pasó de concentrar toda la lógica (≈1.400 líneas, 57 rutas) a ser solo el punto de composición (≈540 líneas), con el resto repartido en 12 routers independientes por dominio bajo `layers/`, migrado de forma incremental sin cambiar ninguna URL de la interfaz.
+- **Cadena de agentes** — construida como las cinco piezas independientes descritas arriba (Cinéfilo, Escritor, Agrupador, Agente-BBDD, Obsi) e integrada con el flujo de subida de documentos, el progreso en vivo y el vault de Obsidian.
 
 ---
 
-## Novedades v5.7
+## Historial de versiones
 
-Bloque de herramientas ofensivas interactivas, todas frontend (sin llamadas externas) y con botón "Guardar en KB" que persiste el comando en la base de datos:
+<details>
+<summary><strong>v5.8</strong> — Módulo de explotación web</summary>
 
-### 💉 Generador de Payloads SQLi
-- Modal en el módulo de Comandos con selector de tipo de campo (login usuario/contraseña, buscador, parámetro URL) y objetivo (bypass auth, detección, UNION-based, comentar query)
-- Payloads regenerados en tiempo real, cada uno con explicación, copiar y guardar en KB (categoría `SQL Injection`)
+- **Vulnerabilidades Web**: fichas de Path Traversal/LFI/RFI, XXE, SSRF y SSTI (detección, payloads, bypasses) y ficheros clave a leer
+- **Identificador de motor SSTI**: a partir del payload probado y la respuesta observada, sugiere el motor (Jinja2, Tornado, Mako, ERB, FreeMarker, Velocity, Thymeleaf, Twig, Smarty, Nunjucks, Razor) y su payload de RCE
+- **Diccionarios y polyglots**: payloads polyglot SSTI/XSS y rutas exactas de SecLists
+- 3 técnicas nuevas de escalada de privilegios (binario sobreescribible, bypass de rbash, persistencia SSH)
+- Checklist de Metodología Web
+- Fix: escapado seguro de comillas/HTML en los botones de copiar/guardar
+</details>
 
-### 🪟 Sección Windows / AD en Enumeración
-- Nuevo cuarto tab del módulo Enumeración
-- SMB (smbclient, enum4linux), MSSQL e Impacket (mssqlclient, secuencia xp_cmdshell completa, comprobación sysadmin), post-explotación (psexec, secretsdump) y tabla de equivalencias Windows vs Linux
+<details>
+<summary><strong>v5.7</strong> — Herramientas ofensivas interactivas</summary>
 
-### ⚡ Catálogo de técnicas de escalada de privilegios
-- Tarjetas de técnica en el filtro PrivEsc: nombre, comando de detección, comando de explotación y campo de referencia editable para notas propias
-- 4 técnicas precargadas (PATH Hijacking, SUID interactivo, vi/vim vía sudo, historial PowerShell)
-- El usuario puede añadir sus propias técnicas desde la UI; todo persiste en `localStorage`
+- Generador de payloads SQLi (bypass auth, detección, UNION-based, comentar query)
+- Sección Windows/AD en Enumeración (SMB, MSSQL/Impacket, post-explotación, tabla Windows vs Linux)
+- Catálogo de técnicas de escalada de privilegios en tarjetas (detección + explotación + notas propias)
+- Estabilización de shell (TTY upgrade) con aviso de pasos manuales
+- Generador de reverse shells (PHP, Bash /dev/tcp, PowerShell) con IP/puerto interpolados
+- Checklist de auditoría WordPress
+</details>
 
-### 🐚 Estabilización de shell (TTY upgrade)
-- Snippet de los 5 pasos copiable de una vez y paso a paso, con aviso de que Ctrl+Z y fg son acciones manuales
+<details>
+<summary><strong>v5.6</strong> — Threat Intelligence, MITRE, Forense e Informes</summary>
 
-### 🔌 Generador de Reverse Shells
-- Modal con IP, puerto y técnica (PHP simple, PHP mkfifo, Bash /dev/tcp, PowerShell + nc64.exe)
-- Comandos con IP/puerto interpolados y recordatorio dinámico del listener (`nc -lvnp PUERTO`)
+- Threat Intelligence: AbuseIPDB y MalwareBazaar junto a VirusTotal
+- Extracción automática de técnicas MITRE ATT&CK con tab dedicado por táctica
+- Generador de informes de auditoría (técnico + ejecutivo), exportable en Markdown/PDF
+- Have I Been Pwned, mejora de subdominios (crt.sh + HackerTarget), LeakRadar (credenciales filtradas)
+- Badges de Exploit-DB en CVEs
+- Cheatsheet de escalada de privilegios (19 técnicas) con enlaces a GTFOBins/LOLBAS
+- Modo Forense: pipeline automático por hash SHA256 con síntesis por IA
+- Barras de progreso animadas y rediseño del panel de API Keys
+</details>
 
-### 📰 Checklist de auditoría WordPress
-- Nuevo tipo de checklist en Auditorías con 8 ítems (information disclosure en login, enumeración de usuarios, fuerza bruta, plugins/temas vulnerables, file upload, permisos de ficheros sensibles)
-- Comandos `wpscan` integrados y progreso guardado igual que el resto de auditorías
+<details>
+<summary><strong>v3</strong> — Versión inicial</summary>
 
----
-
-## Novedades v5.6
-
-### 🗺 Módulo de Enumeración
-Nuevo módulo enfocado en el flujo ofensivo real de pentesting, organizado en tres secciones:
-
-- **Descubrimiento de red**: métodos ARP/ICMP con nivel de ruido (silencioso / moderado / ruidoso), tabla de interpretación de TTL por SO, generador de comandos personalizado con rango de red y herramienta seleccionable
-- **Análisis de servicios**: metodología de dos fases (descubrimiento rápido → análisis profundo), generador Nmap interactivo en tiempo real con toggles para todos los flags, acordeón con 9 servicios (FTP/SSH/Telnet/SMTP/DNS/HTTP/SMB/RDP/MySQL) con vectores de ataque y comandos copiables, tabla de servicios adicionales
-- **Cheatsheet Nmap**: referencia rápida completa organizada por categorías (puertos, tipos de escaneo, velocidad, output, scripts NSE)
-- Integración con KB: botón 💾 en cada comando para guardarlo directamente en la base de datos con categoría y OS inferido automáticamente
-- Generador Nmap con botón para crear nota con los comandos generados, IP y fecha
-
-### 🔬 Modo Forense
-Pipeline automático de análisis de malware por hash SHA256:
-1. VirusTotal + MalwareBazaar en paralelo
-2. Any.run (si detecciones > 5) para sandbox dinámico
-3. Claude sintetiza toda la información → nota estructurada con CVEs, técnicas MITRE y timeline
-4. Indicadores de progreso por fase con estados visuales
-
-### 🎯 Threat Intelligence
-Integrado en el módulo OSINT:
-- **VirusTotal hash lookup**: análisis de ficheros por MD5/SHA1/SHA256 con detecciones por motor AV
-- **AbuseIPDB**: reputación de IPs con histórico de abusos reportados
-- **MalwareBazaar**: lookup de hashes con metadatos de muestras de malware
-
-### ⚡ MITRE ATT&CK
-- Extracción automática de técnicas ATT&CK al analizar documentos con IA
-- Tab dedicado con técnicas organizadas por táctica (Reconocimiento → Exfiltración)
-- Tarjetas con ID, nombre, táctica y fragmento de contexto
-- Búsqueda en tiempo real y enlace directo a attack.mitre.org
-
-### 📄 Generador de Informes
-Desde el módulo de Auditorías, con elementos completados:
-- **Informe técnico**: detalle de hallazgos con evidencias, comandos y recomendaciones técnicas
-- **Informe ejecutivo**: resumen de riesgo, impacto de negocio y plan de acción para dirección
-- Exportar en Markdown o imprimir como PDF desde el navegador
-
-### 🔓 Detección de Credenciales Filtradas (LeakRadar)
-- Búsqueda por email o dominio en bases de datos de brechas (compatible DeHashed)
-- Contraseñas enmascaradas automáticamente para uso responsable
-- Disponible en el módulo OSINT → sección Email
-
-### 💥 Exploit-DB en CVEs
-- Badge por cada CVE que indica si existe exploit público en Exploit-DB
-- Carga lazy (solo cuando se visualiza la lista de CVEs)
-- Enlace directo al exploit con detalles del módulo afectado
-
-### ⚡ PrivEsc Cheatsheet
-- 19 técnicas de escalada de privilegios pre-cargadas (9 Linux + 10 Windows)
-- Filtro dedicado ⚡ PrivEsc en el módulo de Comandos
-- Badge amber en cada comando de escalada
-- Accesos rápidos a GTFOBins y LOLBAS
-
-### 🔍 OSINT mejorado
-- **Subdominios**: fuentes combinadas crt.sh + HackerTarget con deduplicación y badges por fuente
-- **HIBP mejorado**: verificación de emails y dominios con HIBP v3, resultados inline
-- **Búsqueda de credenciales**: nuevo botón LeakRadar en la sección Email
-
-### 🔧 UX y rendimiento
-- Barras de progreso animadas en todas las operaciones largas (upload, análisis IA, forense, reindexado)
-- Botón API Keys centrado y destacado visualmente en la barra de navegación
-- Fix: botón Reindexar ahora vuelve siempre a su estado original
-- Fix: campos de API key con texto-overflow sin scroll lateral
-- Versión v5.6 en título y logo
+Arquitectura base completa: servidor FastAPI + SQLite, frontend en un único fichero con grafo D3.js, integración con Claude para extracción automática de notas/comandos/herramientas/CVEs, módulo OSINT con 15+ herramientas, base de comandos con detección de SO y Google Dorks precargados, checklists de auditoría, empaquetado como ejecutable de Windows.
+</details>
 
 ---
 
 ## Requisitos
 
 - Python 3.11 o superior
-- API key de Anthropic (Claude) — [obtener aquí](https://console.anthropic.com/)
-- Conexión a internet (solo para llamadas a APIs configuradas)
+- API key de Anthropic (Claude) — [obtener aquí](https://console.anthropic.com/) — **obligatoria**, es la que da servicio al análisis con IA
+- Conexión a internet (para la IA y los servicios externos que configures)
+- Para procesar vídeos: `ffmpeg` disponible en el sistema (lo usa `yt-dlp`)
 
 ---
 
@@ -213,6 +198,9 @@ Edita `.env` con tus API keys:
 # Obligatoria
 ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxx
 
+# Opcional — transcripción de vídeo por Whisper (alternativa a subtítulos)
+OPENAI_API_KEY=
+
 # Opcionales — dejar vacío para deshabilitar esa herramienta
 VIRUSTOTAL_API_KEY=       # gratis — virustotal.com
 ABUSEIPDB_API_KEY=        # gratis — abuseipdb.com
@@ -223,6 +211,9 @@ LEAKRADAR_API_KEY=        # DeHashed compatible — dehashed.com
 ANYRUN_API_KEY=           # gratis (tier limitado) — any.run
 SHODAN_API_KEY=           # de pago — shodan.io
 URLSCAN_API_KEY=          # gratis — urlscan.io
+
+# Opcional — vault de Obsidian propio (si se deja vacío, usa ./vault)
+OBSIDIAN_VAULT_DIR=
 ```
 
 > También puedes configurar todas las keys desde la propia app: botón **🔑 API Keys** en la barra superior. Se guardan en `.env` sin reiniciar el servidor.
@@ -246,36 +237,38 @@ Se abre automáticamente en `http://localhost:8000`.
 ### Importar un documento
 
 1. Pulsa **⊕ Subir doc** en la barra superior
-2. Selecciona un PDF, ODT, TXT o MD
-3. Activa **Guardar automáticamente**
-4. La IA extrae notas, comandos, herramientas, CVEs y técnicas MITRE automáticamente
+2. Selecciona un PDF, ODT, DOCX, HTML, TXT, MD o LOG
+3. La cadena de agentes lo procesa y, si el contenido es válido, lo guarda automáticamente con sus notas, comandos, herramientas, CVEs y técnicas MITRE
 
-### Módulo Enumeración (flujo ofensivo)
+### Procesar un vídeo
+
+1. En el módulo **Editor**, pega la URL del vídeo
+2. La aplicación obtiene la transcripción (subtítulos oficiales o Whisper) y la trata igual que un documento
+
+### Módulo Enumeración
 
 1. Pestaña **🗺 ENUMERACIÓN**
-2. **Descubrimiento de red**: introduce el rango y genera el comando con la herramienta elegida
-3. **Análisis de servicios**: usa el generador Nmap para construir ambas fases, luego consulta el acordeón del servicio que encuentres abierto
-4. **Cheatsheet Nmap**: referencia rápida de todos los flags
+2. Descubrimiento de red → genera el comando con la herramienta elegida
+3. Análisis de servicios → generador Nmap de dos fases, luego consulta el servicio que encuentres abierto
+4. Cheatsheet → referencia rápida de todos los flags
 
 ### Análisis forense
 
 1. Pestaña **🔬 FORENSE**
-2. Pega un hash SHA256
-3. Pulsa **▶ Analizar** — el pipeline corre en segundo plano y crea una nota automáticamente
+2. Introduce un hash (MD5, SHA1 o SHA256)
+3. **▶ Analizar** — el pipeline corre en segundo plano y crea una nota con las conclusiones
 
 ### OSINT
 
 1. Pestaña **◎ OSINT**
-2. Selecciona herramienta por categoría
-3. Introduce la consulta → **▶ Ejecutar**
-4. Resultados guardados en historial automáticamente
+2. Selecciona herramienta por categoría (dominio / IP / email / URL / threat intel)
+3. Introduce la consulta → **▶ Ejecutar** — queda en el historial
 
 ### Generar informe de auditoría
 
 1. Pestaña **✓ AUDITORÍAS**
-2. Selecciona tipo (Web App, Red, AD…)
-3. Completa los elementos del checklist
-4. Pulsa **📄 Generar Informe** → elige técnico o ejecutivo → descarga MD o imprime PDF
+2. Elige el tipo de auditoría y completa la lista de verificación
+3. **📄 Generar Informe** → técnico o ejecutivo → descarga en Markdown o imprime como PDF
 
 ---
 
@@ -292,17 +285,16 @@ Se abre automáticamente en `http://localhost:8000`.
 | | robots.txt | No |
 | **IP / Red** | IP Geolocalización | No |
 | | Reverse DNS (PTR) | No |
-| | ASN / BGP (bgpview.io) | No |
 | | Shodan | Sí (pago) |
-| | AbuseIPDB | Sí (gratis) |
-| | VirusTotal (hash/IP) | Sí (gratis) |
-| | MalwareBazaar | Sí (gratis) |
 | **Email** | Verificar Email (MX + SMTP) | No |
 | | Have I Been Pwned | Sí (dominio gratis, email pago) |
 | | Hunter.io email finder | Sí (gratis) |
 | | LeakRadar (credenciales filtradas) | Sí (DeHashed) |
 | **URL / Web** | HTTP Headers + seguridad | No |
 | | URLscan.io | No / Sí (para enviar) |
+| **Threat Intel** | AbuseIPDB | Sí (gratis) |
+| | VirusTotal (hash/IP) | Sí (gratis) |
+| | MalwareBazaar | Sí (gratis) |
 
 ---
 
@@ -325,35 +317,63 @@ build.bat
 
 ```
 CyberKB/
-├── main.py              # FastAPI app + todos los endpoints
-├── models.py            # Modelos SQLAlchemy (Note, Command, Tool, CVE, GraphEntity, MitreTechnique…)
-├── database.py          # Configuración SQLite
-├── claude_service.py    # Integración Claude API (análisis, extracción, informes, forense)
-├── osint_tools.py       # 18+ herramientas OSINT asíncronas
-├── document_parser.py   # Parser PDF / ODT / TXT / MD
-├── index.html           # Frontend completo (vanilla JS + D3.js, single-file)
-├── requirements.txt     # Dependencias Python
-├── cyberkb.spec         # Spec PyInstaller
-├── start.bat            # Script de inicio (Windows)
-├── build.bat            # Script de compilación EXE
-├── .env.example         # Plantilla de variables de entorno (sin keys reales)
-├── data/                # Base de datos SQLite (generada al arrancar)
-└── uploads/             # Documentos subidos (excluidos de git)
+├── main.py                    # Punto de composición FastAPI: config, ciclo de vida, routers
+├── layers/
+│   ├── routers/                # 12 routers por dominio (notes, analyze, osint, tools,
+│   │                            #  commands, cves, mitre, graph, audits, chat, settings, forensic)
+│   └── routers_functions.py    # Funciones auxiliares compartidas entre routers
+├── models.py                  # Modelos SQLAlchemy (Note, Command, Tool, CVE, MitreTechnique…)
+├── database.py                 # Configuración SQLite
+├── claude_service.py           # Integración Claude API (análisis, extracción, informes, forense)
+├── osint_tools.py              # 19 herramientas OSINT asíncronas
+├── document_parser.py          # Parser PDF / ODT / DOCX / HTML / TXT / MD
+├── mitre_reference.json        # Catálogo local de las 697 técnicas MITRE ATT&CK (STIX oficial)
+├── index.html                  # Frontend completo (vanilla JS + D3.js, single-file)
+├── Agentes-CyberKB/Editor/      # Cadena de agentes de ingesta
+│   ├── Cinefilo/                #   transcripción de vídeo
+│   ├── Escritor/                #   filtrado y resumen
+│   ├── Agrupador/               #   extracción y clasificación
+│   ├── Agente-BBDD/             #   guardado determinista en base de datos
+│   └── Obsi/                    #   sincronización con el vault de Obsidian
+├── scripts/
+│   └── migrate_to_obsidian.py  # Migración/regeneración manual del vault completo
+├── vault/                      # Vault de Obsidian (generado; grafo nativo sin coste de IA)
+├── requirements.txt            # Dependencias Python
+├── cyberkb.spec                 # Spec PyInstaller
+├── start.bat                   # Script de inicio (Windows)
+├── build.bat                    # Script de compilación EXE
+├── .env.example                 # Plantilla de variables de entorno (sin keys reales)
+├── data/                        # Base de datos SQLite (generada al arrancar)
+└── uploads/                     # Documentos subidos (excluidos de git)
 ```
 
 ---
 
 ## Stack tecnológico
 
-- **Backend**: FastAPI · Uvicorn · SQLAlchemy · SQLite
-- **IA**: Anthropic Claude Sonnet (análisis, extracción de entidades, informes, síntesis forense)
-- **Frontend**: Vanilla JS · D3.js v7 (grafo fuerza-dirigida)
+- **Backend**: FastAPI (arquitectura por capas, 12 routers) · Uvicorn · SQLAlchemy · SQLite
+- **IA**: Anthropic Claude (análisis, extracción de entidades, informes, síntesis forense) · OpenAI Whisper (transcripción de vídeo, opcional)
+- **Cadena de agentes**: 5 agentes especializados en ingesta — ver [Arquitectura](#arquitectura)
+- **Grafo de conocimiento**: D3.js v7 (vista interna) + vault de Obsidian (grafo nativo externo, sin coste de IA)
+- **Vídeo**: yt-dlp + ffmpeg
+- **Frontend**: Vanilla JS, single-file
 - **OSINT**: httpx async · dnspython · python-whois · 10+ APIs públicas y privadas
 - **Empaquetado**: PyInstaller (EXE Windows standalone)
+
+---
+
+## Evolución y planes a futuro
+
+El proyecto sigue en desarrollo activo:
+
+- **Chat como asistente diario** — que deje de ser una consulta puntual y pase a orientar en las tareas habituales y en el uso del resto de módulos.
+- **Búsqueda semántica** — sobre la base de conocimiento, para encontrar notas, comandos o CVEs relacionados aunque no coincidan las palabras exactas.
+- **Optimización para proyectos, máquinas y laboratorios** — agilizar las tareas más frecuentes de una auditoría o un ejercicio práctico.
+- **Experiencia de usuario y rendimiento** — más información de progreso para el usuario y mejoras de velocidad.
 
 ---
 
 ## Licencia
 
 MIT — libre para uso personal y educativo.
-Proyecto académico desarrollado durante el Master en Ciberseguridad de [Evolve](https://evolve.es).
+Proyecto académico desarrollado durante el Máster en Ciberseguridad de [Evolve](https://evolve.es).
