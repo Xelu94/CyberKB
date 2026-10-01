@@ -22,7 +22,7 @@
   },
 
   "limites": {
-    "duracion_maxima_segundos": 5400,
+    "duracion_maxima_segundos": 14400,
     "troceo_segundos": 1200,
     "caracteres_minimos": 200,
     "timeout_descarga_segundos": 600,
