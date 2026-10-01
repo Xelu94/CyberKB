@@ -3728,6 +3728,19 @@ function setCveSev(sev,btn){
   if(btn) btn.classList.add('active');
   renderCVEs();
 }
+// Normaliza la severidad a la clave canónica (critical/high/medium/low/info) que
+// usan las clases CSS .sev-* y el filtro de la barra. La severidad llega en dos
+// idiomas: el Agrupador la guarda en español (critica/alta/media/baja) y NVD en
+// inglés (CRITICAL/HIGH/...). Sin esto, "critica" no casaba con .sev-critical
+// (badge sin color) ni con el filtro 'critical' (no aparecía al filtrar).
+function _sevKey(s){
+  const t=(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+  if(t.startsWith('crit')) return 'critical';
+  if(t==='alta'||t==='high') return 'high';
+  if(t==='media'||t==='medium'||t==='med'||t==='moderada') return 'medium';
+  if(t==='baja'||t==='low') return 'low';
+  return 'info';
+}
 
 // ─── Buscar cualquier CVE por ID en NVD (módulo CVEs) ─────────────────────────
 // Flujo de lookupCVE(id):
@@ -3747,7 +3760,7 @@ async function lookupCVE(id){
       list.innerHTML=back+'<div class="empty-msg">CVE '+esc(id)+' no encontrado en NVD'+(d.error?' ('+esc(d.error)+')':'')+'.</div>';
       return;
     }
-    const sev=(d.severity||'').toLowerCase();
+    const sev=_sevKey(d.severity);
     list.innerHTML=back+`<div class="cve-entry" style="border:1px solid var(--cyan);">
       <div>
         <div class="cve-id">${esc(d.cve_id)}</div>
@@ -3839,7 +3852,7 @@ async function saveLookedCVE(btn){
 function renderCVEs(){
   const q=(document.getElementById('cveSearch').value||'').toLowerCase();
   let cves=q?S.cves.filter(c=>c.cve_id.toLowerCase().includes(q)||(c.description||'').toLowerCase().includes(q)):S.cves;
-  if(_cveSevFilter!=='all') cves=cves.filter(c=>(c.severity||'').toLowerCase()===_cveSevFilter);
+  if(_cveSevFilter!=='all') cves=cves.filter(c=>_sevKey(c.severity)===_cveSevFilter);
   document.getElementById('cveCount').textContent=cves.length+' CVEs';
   if(!cves.length){
     // Si no hay resultados locales pero lo tecleado ES un ID de CVE completo,
@@ -3853,7 +3866,7 @@ function renderCVEs(){
     return;
   }
   document.getElementById('cvesList').innerHTML=cves.map(c=>{
-    const sevClass=`sev-${(c.severity||'info').toLowerCase()}`;
+    const sevClass=`sev-${_sevKey(c.severity)}`;
     const edbCached=_edbCache[c.cve_id];
     const edbBadge=edbCached
       ? (edbCached.count>0
