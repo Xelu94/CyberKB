@@ -14,7 +14,7 @@ from layers.routers_functions import AnalyzeIn, _note_dict, _runtime_dir
 # Cadena de agentes del Editor (Escritor -> Agrupador -> Agente-BBDD -> Obsi).
 # main.py deja las carpetas de los agentes en sys.path al arrancar, antes de
 # importar este router, asi que estos imports resuelven.
-from escritor import _procesar as _escritor_procesar
+from escritor import _procesar as _escritor_procesar, MSG_VACIO
 from agrupador import _procesar as _agrupador_procesar, ResumenEscritor
 
 
@@ -78,7 +78,7 @@ def upload_document(file: UploadFile = File(...), db: Session = Depends(get_db))
 
     text = parser.parse_file(str(dest), file.filename)
     if not text.strip():
-        raise HTTPException(422, "No text could be extracted from the file.")
+        raise HTTPException(422, MSG_VACIO)
 
     progreso.iniciar()
     try:
