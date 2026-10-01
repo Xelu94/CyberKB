@@ -2695,7 +2695,11 @@ async function uploadFile(file,modal=false){
 
     S.graphData=null;  // invalidate graph cache
     await loadAll();
-    if(!modal) switchTab('editor');
+    // Deja el Editor en vista de nota (título + ✦ Analizar + ⬇ Descargar + ✕) para la
+    // nota recién subida. Sin esto, al volver a la pestaña tras una subida por el modal
+    // aparecía solo el título, sin la barra para descargar/borrar la nota (2026-10-01).
+    if(n) await loadNote(n.id);
+    else if(!modal) switchTab('editor');
     if(n){
       if(modal) setStatus('Documento procesado — '+n.tools.length+' tools, '+n.commands.length+' comandos');
       else hideGlobalProgress('Documento procesado — '+n.tools.length+' tools, '+n.commands.length+' comandos');

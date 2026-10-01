@@ -46,7 +46,8 @@
 
   "errores": {
     "url_invalida": "Comprueba la URL, no parece ser de video.",
-    "no_ciberseguridad": "Esto no es ciberseguridad.",
+    "no_ciberseguridad": "Me da a mi que esto no es ciberseguridad. Vuelve a probar con otra cosa.",
+    "sin_subtitulos": "Asegurese de que el video tenga subtitulos oficiales si no tiene API de OpenIA. Error de beta.",
     "generico": "Ha pasado algo, vuelve a intentarlo."
   }
 }

@@ -97,6 +97,12 @@ def _error_tema() -> HTTPException:
     return HTTPException(422, ERRORES["no_ciberseguridad"])
 
 
+def _error_sin_subtitulos() -> HTTPException:
+    """El video no tiene subtitulos oficiales usables y no hay OPENAI_API_KEY para
+    transcribir su audio con Whisper, asi que no se puede sacar el texto."""
+    return HTTPException(422, ERRORES["sin_subtitulos"])
+
+
 def _error_generico() -> HTTPException:
     return HTTPException(500, ERRORES["generico"])
 
@@ -272,7 +278,7 @@ def _preparar_audio(origen: Path) -> list[Path]:
 def _transcribir(partes: list[Path]) -> str:
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise _error_generico()
+        raise _error_sin_subtitulos()
     cliente = OpenAI(api_key=api_key, timeout=LIMITES["timeout_transcripcion_segundos"])
 
     trozos: list[str] = []
@@ -405,6 +411,12 @@ def _extraer_texto(url: str, info: dict, trabajo: Path) -> tuple[str, str]:
         texto = _descargar_subtitulos(pista)
         if texto and _visibles(texto) >= LIMITES["caracteres_minimos"]:
             return texto, "subtitulos"
+
+    # Sin subtitulos oficiales usables: la unica via es transcribir el audio con
+    # Whisper (OpenAI). Si no hay key, cortamos aqui con un mensaje claro en vez de
+    # descargar el audio y el ffmpeg en balde para acabar fallando igual.
+    if not os.getenv("OPENAI_API_KEY"):
+        raise _error_sin_subtitulos()
 
     audio = _descargar_audio(url, trabajo)
     return _transcribir(_preparar_audio(audio)), "transcripcion"
