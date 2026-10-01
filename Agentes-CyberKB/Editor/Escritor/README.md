@@ -83,6 +83,9 @@ La respuesta HTTP devuelve ese mismo JSON más `pdf_url` y `agrupador_entregado`
    anterior, baja `min_caracteres_entrada` a unos 3400 en [config.json](config.json).
    Se aplica igual si el documento supera el umbral pero, una vez filtrado, no contiene
    materia de ciberseguridad.
+   Si el texto no tiene **ni un solo carácter visible** (un archivo vacío, o uno con
+   solo espacios y saltos de línea), el `422` lleva en su lugar
+   `Añade un texto con algo escrito al menos...`
 2. **Cualquier error durante la creación del resumen** responde `500` con
    `Ha pasado algo, vuelve a intentarlo.` La app muestra ese mensaje tal cual.
 3. **El origen se deduce del endpoint**, nunca de datos que envíe el llamante.
@@ -99,10 +102,10 @@ Todo lo ajustable vive en [config.json](config.json) y el agente lo lee al arran
 |---|---|
 | `modelo` | Modelo (`claude-opus-5`), respaldo, `max_tokens` y esfuerzo de razonamiento |
 | `limites` | Mínimo de caracteres, extensiones admitidas y tiempo de espera del Agrupador |
-| `mensajes` | Los dos textos de error que la app muestra tal cual |
+| `mensajes` | Los textos de error que la app muestra tal cual |
 
 El fichero no repite nada que esté en este README, y el código no repite nada que esté en
-el fichero: los dos textos de error y el umbral de 4000 caracteres que aparecen en
+el fichero: los textos de error y el umbral de 4000 caracteres que aparecen en
 **Reglas** salen de ahí, así que cambiarlos en `config.json` cambia el comportamiento de
 verdad.
 
