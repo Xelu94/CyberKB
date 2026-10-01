@@ -2499,7 +2499,12 @@ async function loadNote(id){
     _edClearPipeline();
     document.getElementById('edEntradaBar').style.display='flex';
     _edToggleEntrada(true);
-    if(n.commands&&n.commands.length||n.tools&&n.tools.length||n.cves&&n.cves.length){
+    // Mostrar la tarjeta de análisis si la nota tiene algo que enseñar: resumen,
+    // subcategoría o tags cuentan igual que comandos/herramientas/CVEs. Si no, un
+    // vídeo conceptual (sin comandos ni CVEs) abría el editor completamente en
+    // blanco, sin ni siquiera el resumen (2026-09-30).
+    if(n.summary||n.subcategory||(n.tags&&n.tags.length)||
+       (n.commands&&n.commands.length)||(n.tools&&n.tools.length)||(n.cves&&n.cves.length)){
       showAIResult({
         category:n.category,subcategory:n.subcategory,
         summary:n.summary,tags:n.tags||[],
