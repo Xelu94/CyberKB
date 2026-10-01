@@ -50,6 +50,7 @@ MENSAJES = CFG["mensajes"]
 MIN_CARACTERES = LIMITES["min_caracteres_entrada"]
 EXTENSIONES = tuple(LIMITES["extensiones"])
 MSG_MIN_CARACTERES = MENSAJES["min_caracteres"]
+MSG_VACIO = MENSAJES["vacio"]
 MSG_ERROR = MENSAJES["error"]
 # Cuelga de la carpeta del agente, no del directorio desde el que se arranque el
 # proceso: asi los resumenes viven siempre junto al Escritor.
@@ -199,7 +200,10 @@ def _procesar(texto: str, origen: Literal["app", "cinefilo"], nombre: str) -> di
         progreso.set_paso("escritor")
     # El recuento va sobre el texto sin espacios: un PDF que solo tiene saltos de
     # linea suma miles de caracteres y llegaria a pagar una llamada al modelo.
-    if _visibles(texto) < MIN_CARACTERES:
+    visibles = _visibles(texto)
+    if visibles == 0:
+        raise HTTPException(422, MSG_VACIO)
+    if visibles < MIN_CARACTERES:
         raise HTTPException(422, MSG_MIN_CARACTERES)
 
     try:

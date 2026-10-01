@@ -13,6 +13,7 @@
   },
 
   "mensajes": {
+    "vacio": "Añade un texto con algo escrito al menos...",
     "min_caracteres": "El resumen no llega al minimo de caracteres requeridos para iniciar el resumen.",
     "error": "Ha pasado algo, vuelve a intentarlo."
   }
